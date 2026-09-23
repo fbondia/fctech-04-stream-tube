@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-02 — technical research and decisions
-**Status:** F03-02 research documented; inherited quality failures remain open; implementation has not started
+**Current task:** F03-03 — implementation planning and clean validation
+**Status:** F03-03 plan complete and validation clean; inherited quality failures remain open; implementation has not started
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
 
@@ -52,3 +52,11 @@ The integration migration test drops managed tables and the `migrations` table, 
 - Produced six decided TDs: BullMQ/Redis with separate worker; S3 multipart directly from client with API-owned completion and 10 GB validation; private originals/thumbnail buckets; ffprobe/FFmpeg with streamed temporary file; opaque unique ID and API proxy streaming with Range/206 and download; PostgreSQL processing intent with F03-07 as sole publisher and reconciliation/idempotence. Alternatives, trade-offs, consequences and F03-03 contracts to fix are documented. No code or dependency changed in F03-02.
 - Verification commands from repo root: `shasum -a 256 ../índice/desafio04.html` exited 0 and matched BIAWS; `rg`/`cat`/`python3` read-only inspection commands exited 0; `git diff --check` exited 0. No npm or runtime tests were run because this task changes only research documentation. The inherited test/lint failures recorded above remain open for later tasks.
 - Handoff to F03-03: pin versions in `library-refs.md` and lockfile/Compose; define Data Model, API/authorization/error/event contracts, upload part and reconciliation limits, status transitions, default visibility, timeout/disc policies and SI tests; validate until `clean`. MinIO-specific S3 behavior and browser-reachable presign hostname require integration proof. Preserve the F03-06/F03-07 publisher boundary.
+
+## F03-03 — Plan and clean validation (2026-09-23)
+
+- Reconfirmed the BIAWS task and canonical HTML checksum. Wrote `context.md` to map the Fase 03 capabilities and scope, and `library-refs.md` to fix package/service versions with official references and compatibility checks. No application code or dependency was changed.
+- Ran a manual plan validation pass against the canonical HTML, BIAWS notes, F03-02 decisions, current backend and phase 02 conventions. It found six planning gaps: multipart limits and crash recovery, ready-video access, state transitions, durable DB→queue handoff, Range semantics, and dependency versions. Added the contract resolutions to the decisions file and produced `phase-03-videos.md` with Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages, dependency map and eleven SI steps. The second pass found zero unresolved planning issues; `validation.md` is `clean` for the plan only.
+- Read-only compatibility checks: `npm view` confirmed `@nestjs/bullmq@11.0.5` peers with current Nest 11 and BullMQ 5.81.5, AWS SDK 3.1136.0 supports the container's Node 25; `apt-cache policy ffmpeg` returned Debian's 5.1.9 candidate. Registry DNS prevented `docker manifest inspect`; F03-04 must prove the pinned Redis pull, MinIO tagged-source build, S3/CORS behavior and FFmpeg runtime before closing. The archived MinIO source route and any build changes must be recorded in `library-refs.md`.
+- Verification: `git diff --check` passed; static plan audit found the required sections, sequential SI-03.1..11 with input/files/commands/exit, no TODO/TBD markers and `validation.md` clean. No runtime tests were run because F03-03 only writes planning documents. The inherited migration-test and lint failures from F03-01 remain open and cannot be treated as green.
+- Handoff: F03-04 may implement infrastructure/config and F03-05 may implement persistence/domain from this shared plan. F03-06 owns completion and durable outbox insertion; F03-07 alone publishes and processes jobs. Record actual command results and any plan deviations here before advancing tasks.
