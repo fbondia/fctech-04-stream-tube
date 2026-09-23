@@ -1,36 +1,13 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StreamTube frontend
 
-## Getting Started
-
-First, run the development server:
+O frontend Next.js roda na porta **3001 do host** via Docker Compose. A porta **3000 do host** pertence à API NestJS. Consulte o [README do projeto](../README.md) para subir o backend e aplicar as migrations antes de iniciar o frontend.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd next-frontend
+printf 'API_URL=http://host.docker.internal:3000\nSESSION_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env.local
+docker compose up -d
+docker compose exec next-frontend npm install # apenas na primeira vez
+docker compose exec -d next-frontend npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Abra [http://localhost:3001](http://localhost:3001). A rota inicial abre a tela de login para visitantes e uma página inicial simples após o login; as telas de cadastro e recuperação de senha também estão disponíveis. A interface de vídeos ainda não foi implementada. O arquivo `.env.local` é ignorado pelo Git. `API_URL` é o endereço do backend visto de dentro do container; `SESSION_PASSWORD` deve ser uma chave exclusiva de pelo menos 32 caracteres para os cookies de sessão. Se rodar `npm run dev` diretamente no host, use `API_URL=http://localhost:3000`.

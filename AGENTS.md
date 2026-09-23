@@ -1,5 +1,3 @@
-# CLAUDE.md
-
 ## Project Overview
 
 StreamTube — a video sharing platform (YouTube-like). Users can upload, manage, and publish videos. Anonymous users can watch freely; social features (comments, subscriptions, likes) require authentication.
@@ -10,21 +8,22 @@ More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 
 This is a monorepo with two main areas:
 
-- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
+- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express), video worker and Compose services. Implemented modules include auth, users, channels, mail and videos.
 - `docs/` — Project documentation, architecture diagrams, and planning.
-- `next-frontend/` (Next.js) — not yet initialized
+- `next-frontend/` — Next.js frontend for the earlier phases; phase 03 has no video UI.
 
 ## Architecture (C4 Container Diagram)
 
-See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
+`docs/diagrams/software-arch.mermaid` is the target architecture and still contains future components. The implemented phase 03 containers are:
 
-- **Frontend** (Next.js) → calls API via REST, streams from Object Storage
-- **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
-- **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
-- **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
-- **Email Service** (SMTP) → account confirmation and password recovery
+- **API** (NestJS) → auth, upload orchestration, durable processing intent, video metadata, streaming and download. It does not receive video bytes or publish BullMQ jobs.
+- **Video worker** (NestJS + FFmpeg) → sole outbox dispatcher and BullMQ consumer; extracts media metadata, generates JPEG thumbnails and commits video state.
+- **PostgreSQL 17** → users, channels, videos and processing outbox.
+- **MinIO Community / S3** → private originals and thumbnails buckets.
+- **Redis 7 + BullMQ** → persistent processing queue.
+- **Mailpit** → local transactional email capture.
+
+The video frontend remains outside phase 03. See `nestjs-project/README.md` for the implemented HTTP routes and verification commands.
 
 ## Docker Networking
 
@@ -88,12 +87,12 @@ those skills.
 
 ## Library Documentation Lookup
 
-Before implementing any feature, you MUST use the **context7** MCP tool to look up the relevant library APIs and official documentation.
+Before using a new library, check its installed version and official documentation. Use Context7 when it is available in the active session; otherwise consult the official documentation directly and record the source in the phase library references.
 
 Always:
 
 - Check the installed library version in the project manifest
-- Retrieve the corresponding documentation using context7
+- Retrieve version-compatible documentation
 - Cross-reference APIs to avoid deprecated or incompatible patterns
 - Follow the official documentation over training data
 

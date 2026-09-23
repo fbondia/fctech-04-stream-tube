@@ -438,6 +438,501 @@
           "auth"
         ]
       }
+    },
+    "/videos/uploads": {
+      "post": {
+        "operationId": "VideosController_initiate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateVideoUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft created; transfer bytes directly to storage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "videoId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "publicId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft"
+                      ]
+                    },
+                    "partSize": {
+                      "type": "integer"
+                    },
+                    "partCount": {
+                      "type": "integer"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a draft and initiate direct multipart upload",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/upload-parts": {
+      "post": {
+        "operationId": "VideosController_sign",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignVideoPartsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Short-lived signed URLs for requested part numbers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "partNumber": {
+                            "type": "integer"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Sign a batch of direct S3 UploadPart URLs",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/upload": {
+      "get": {
+        "operationId": "VideosController_resume",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner upload status and stored part ETags"
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Resume upload and list completed parts",
+        "tags": [
+          "videos"
+        ]
+      },
+      "delete": {
+        "operationId": "VideosController_cancel",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Upload cancelled"
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Cancel incomplete multipart upload",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/upload/complete": {
+      "post": {
+        "operationId": "VideosController_complete",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteVideoUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Confirmed; processing intent persisted"
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Confirm uploaded object and persist processing intent",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}": {
+      "get": {
+        "operationId": "VideosController_get",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner status without storage identifiers"
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Read owner video status",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/reprocess": {
+      "post": {
+        "operationId": "VideosController_reprocess",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "New processing generation persisted"
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Request processing retry for a confirmed failed video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/watch/{publicId}": {
+      "get": {
+        "operationId": "VideoWatchController_metadata",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ready video and media URLs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "publicId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "durationMs": {
+                      "type": "integer"
+                    },
+                    "sizeBytes": {
+                      "type": "integer"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "streamUrl": {
+                      "type": "string"
+                    },
+                    "downloadUrl": {
+                      "type": "string"
+                    },
+                    "thumbnailUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or non-ready video"
+          }
+        },
+        "summary": "Get metadata for a ready video by public URL",
+        "tags": [
+          "watch"
+        ]
+      }
+    },
+    "/watch/{publicId}/stream": {
+      "head": {
+        "operationId": "VideoWatchController_head",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full-object headers without body"
+          }
+        },
+        "summary": "Read full video stream headers",
+        "tags": [
+          "watch"
+        ]
+      },
+      "get": {
+        "operationId": "VideoWatchController_stream",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "description": "Exact strong ETag to permit partial response; mismatch returns full 200",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "One range: bytes=start-end, bytes=start-, or bytes=-suffix",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full video stream"
+          },
+          "206": {
+            "description": "Partial video stream"
+          },
+          "400": {
+            "description": "Malformed or unsupported Range"
+          },
+          "416": {
+            "description": "Unsatisfiable byte Range"
+          }
+        },
+        "summary": "Stream ready video bytes, with optional single byte Range",
+        "tags": [
+          "watch"
+        ]
+      }
+    },
+    "/watch/{publicId}/download": {
+      "get": {
+        "operationId": "VideoWatchController_download",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "description": "Exact strong ETag to permit partial response",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "One byte range",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video download"
+          },
+          "206": {
+            "description": "Partial video download"
+          },
+          "400": {
+            "description": "Malformed or unsupported Range"
+          },
+          "416": {
+            "description": "Unsatisfiable byte Range"
+          }
+        },
+        "summary": "Download ready video bytes, with optional Range",
+        "tags": [
+          "watch"
+        ]
+      }
+    },
+    "/watch/{publicId}/thumbnail": {
+      "get": {
+        "operationId": "VideoWatchController_thumbnail",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG thumbnail"
+          }
+        },
+        "summary": "Stream the ready video JPEG thumbnail",
+        "tags": [
+          "watch"
+        ]
+      }
     }
   },
   "info": {
@@ -480,6 +975,76 @@
       "ResetPasswordDto": {
         "type": "object",
         "properties": {}
+      },
+      "InitiateVideoUploadDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10000000000
+          }
+        },
+        "required": [
+          "title",
+          "filename",
+          "mimeType",
+          "sizeBytes"
+        ]
+      },
+      "SignVideoPartsDto": {
+        "type": "object",
+        "properties": {
+          "partNumbers": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "partNumbers"
+        ]
+      },
+      "VideoPartDto": {
+        "type": "object",
+        "properties": {
+          "partNumber": {
+            "type": "number"
+          },
+          "eTag": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "partNumber",
+          "eTag"
+        ]
+      },
+      "CompleteVideoUploadDto": {
+        "type": "object",
+        "properties": {
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VideoPartDto"
+            }
+          }
+        },
+        "required": [
+          "parts"
+        ]
       },
       "ApiErrorEnvelope": {
         "type": "object",
