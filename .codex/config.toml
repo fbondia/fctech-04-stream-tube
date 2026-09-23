@@ -1,0 +1,8 @@
+# Project MCP declarations for trusted Codex sessions. Verify connections after opening the project.
+[mcp_servers.postgres]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://streamtube:streamtube@localhost:15432/streamtube"]
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
