@@ -1,9 +1,34 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-09 — integrated regression and failure matrix
-**Status:** SI-03.10 implemented and verified. F03-10 is next. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
+**Current task:** F03-10 — documentation, Definition of Done and final audit
+**Status:** SI-03.11 implemented; final gates green. Fase 03 backend and infrastructure complete locally on `feature/phase-03-videos`.
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## F03-10 — Final documentation and Definition of Done (2026-09-23)
+
+- Started from clean `feature/phase-03-videos` at `c9a50df`, derived from local `dev` at `8459b2f`; `origin` is the user's fork and `upstream` push remains disabled. Confirmed F03-01..09 `Concluído` and moved F03-10 to `Andamento` in BIAWS. Rechecked the improvement context, notes, F03-10 task and canonical `desafio04.html` SHA-256 `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`.
+- Ran repository-wide `npm run lint`: the inherited F03-01 baseline reproduced exactly 150 errors and 40 warnings. Fixed unsafe test fixtures, mock call assertions, Mailpit response types, PostgreSQL unique-error narrowing, an unused import, and the `IsNull()` query without disabling rules. A second full lint run exited 0 with no findings. F03-05 had already fixed the inherited migration replay failure; its origin remains in the F03-01 baseline below.
+- A fresh `compose down` (volumes preserved) and `compose up -d --build` exposed a startup race: the worker queried the outbox before migrations existed and stopped refreshing its health marker. Changed worker startup to wait for the outbox relation before creating the BullMQ consumer/dispatcher, remove a stale health marker, and exit on other bootstrap failures so Docker can restart it. Proved this against a temporary empty PostgreSQL database: worker logged migration wait and had no health marker; after three migrations it became ready and passed `worker-health.js`. Removed the probe worker/database. Rebuilt the main worker and `scripts/smoke-video-infra.sh` then exited 0.
+- Updated root/backend `CLAUDE.md` and READMEs to describe actual services, routes, queue ownership, storage, commands and scope. Corrected the documented dispatcher row lease from 60 seconds to the implemented 2 minutes and replaced planned test filenames that never materialized with actual files. `context.md`, `library-refs.md`, the decisions and `validation.md` have final implementation addenda; the clean plan remains valid. `npm run openapi:export` exited 0 with no artifact diff.
+
+| BIAWS checklist item | Objective evidence |
+| --- | --- |
+| Fork, phase 01–02 baseline, feature from dev | `git remote -v`, `git merge-base dev HEAD = git rev-parse dev = 8459b2f`; F03-01 baseline below; full regression suites green. |
+| Codex AI foundation | Root/backend `AGENTS.md`, `.codex/config.toml`, `codex-workflow.md`; declared MCP availability and manual fallback documented without claiming unavailable tools ran. |
+| Phase 03 technical research | `docs/decisions/technical-decisions-phase-03-videos.md`, `library-refs.md`; final `npm ls --depth=0` matches pinned Nest 11.1.16, TypeORM 0.3.28, BullMQ 5.81.5 and AWS SDK 3.1136.0. |
+| Planning pipeline ends clean | `context.md`, `validation.md` (`status: clean`), this plan and the F03-03 two-pass issue resolution. |
+| SIs and required plan sections | `phase-03-videos.md` has Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages, Dependency Map, Deliverables and SI-03.1..11. |
+| Direct multipart up to 10 GB, automatic draft | `video-upload.integration-spec.ts`, `video-upload.e2e-spec.ts`, `video-lifecycle.e2e-spec.ts`; 10 GB boundary via metadata without a large fixture; no API binary body path. |
+| Queue, worker, ffprobe/FFmpeg, thumbnail | `src/video-worker.ts`, `video-dispatcher.ts`, `video-consumer.ts`, `video-media.ts`, `video-worker.integration-spec.ts`; real MP4 to JPEG/metadata and recovery tests. |
+| Unique URL, Range/206, download | Unique `public_id` index in video migration/entity; `video-stream.e2e-spec.ts`, `video-range.spec.ts`, `video-lifecycle.e2e-spec.ts` prove real bytes and 200/206/400/416. |
+| Migration, video→channel and state cycle | `CreateVideos1790179200000`, `migrations.integration-spec.ts`, `video.entity.integration-spec.ts`, `videos.service.integration-spec.ts`, `video-state.spec.ts`; up/down, FK, uniqueness and conditional transitions. |
+| MinIO, queue and worker in Compose | `compose.yaml`, `compose.codex.yaml`, `scripts/smoke-video-infra.sh`; clean build/config, private buckets, Redis/worker health and temporary-empty-DB startup probe. |
+| Unit, integration and e2e green | Full `npm test -- --runInBand --forceExit`: 37/37 suites, 180/180 tests; full `npm run test:e2e -- --runInBand`: 6/6 suites, 57/57 tests. |
+| Full suite, typecheck, lint, progress and instructions | All commands above plus `npx tsc --noEmit`, `npm run lint`, OpenAPI export and `git diff --check` exited 0; root/backend instructions and this audit updated. |
+
+- Final run after clean stack rebuild: `compose config --quiet`, `compose down`, `compose up -d --build`, `npm run migration:run` (all three migrations on the empty DB), full backend and e2e suites, `npx tsc --noEmit`, full `npm run lint`, `npm run openapi:export`, worker rebuild and S3/Redis/worker smoke each exited 0. Compose showed PostgreSQL, Mailpit, MinIO, Redis and worker healthy; `minio-init` exited 0; the API development container was running idle as designed. The final full gate was repeated after the worker startup correction below.
+- Tracked-file audit found no private keys or live-key patterns; `.env` is ignored. The only versioned video fixture is 3.8 KB. Pre-existing large `.fig` design sources and `whiteboard.svg` are unrelated project assets, not test media. No push, PR, or commit to `main` was made. Production S3 lifecycle, real 10 GB load testing and the video frontend remain outside this local phase 03 DoD; the 10 GB contract is proven by bounds and direct-part architecture plus small real uploads.
 
 ## F03-09 — Integrated regression and resilience (2026-09-23)
 

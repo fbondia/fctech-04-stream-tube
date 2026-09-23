@@ -9,7 +9,7 @@ sources_checked: 2026-09-23
 
 ## Scope and authority
 
-Primary source: BIAWS improvement `desafio-04`, attachment `desafio04.html` (SHA-256 `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`, matching `../índice/desafio04.html`). The 2026-09-23 BIAWS notes override older TXT-only instructions and assign durable confirmation intent to F03-06 and sole queue publication to F03-07. `docs/project-plan.md` §Fase 03 adds resumable upload; `docs/diagrams/software-arch.mermaid` is a target architecture. F03-01 and F03-02 are `Concluído` in BIAWS; F03-03 is the current task. The decided source for technical choices is `docs/decisions/technical-decisions-phase-03-videos.md`.
+Primary source: BIAWS improvement `desafio-04`, attachment `desafio04.html` (SHA-256 `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`, matching `../índice/desafio04.html`). The 2026-09-23 BIAWS notes override older TXT-only instructions and assign durable confirmation intent to F03-06 and sole queue publication to F03-07. `docs/project-plan.md` §Fase 03 adds resumable upload; `docs/diagrams/software-arch.mermaid` remains a target architecture. The decided source for technical choices is `docs/decisions/technical-decisions-phase-03-videos.md`; actual implementation and final evidence are in `progress.md`.
 
 **Capabilities to deliver:** private S3-compatible object storage with local MinIO, queue and separate worker in Compose; draft video created on upload start; direct resumable upload up to 10 GB without routing bytes through the API; automatic metadata/thumbnail processing; unique stable video URL; partial streaming and download; migration and channel ownership; unit/integration/e2e coverage and complete phase artifacts.
 
@@ -28,10 +28,10 @@ Primary source: BIAWS improvement `desafio-04`, attachment `desafio04.html` (SHA
 
 ## Existing patterns and baseline
 
-- Backend lives in `nestjs-project/`; current branch `feature/phase-03-videos` was created from local `dev` at `8459b2f3a9c0dcad4bd0f31972761c00c52609a1`. F03-02 commit is `09f922c`. No video code or new infrastructure exists yet.
+- Backend lives in `nestjs-project/`; branch `feature/phase-03-videos` was created from local `dev` at `8459b2f3a9c0dcad4bd0f31972761c00c52609a1`. The phase 03 implementation now includes `VideosModule`, private MinIO buckets, Redis/BullMQ, a separate FFmpeg worker, upload and watch endpoints, and a generated `openapi.json`.
 - NestJS 11, TypeORM 0.3, PostgreSQL 17, Node 25.6.0 development image. `AuthModule` registers a global JWT guard; `@Public()` bypasses it. `@CurrentUser()` yields JWT `sub`, which is user ID. `Channel.user_id` is unique; videos must link to `Channel.id` and resolve ownership via user ID. Keep existing class-validator DTOs, global ValidationPipe, domain-error shape `{statusCode,error,message}`, `@nestjs/config` `registerAs` namespaces and Joi env validation.
 - Versioned migrations are discovered from `src/database/migrations/*.ts`; runtime entities use TypeORM modules. Backend `npm`/`npx`/Jest/TS commands run inside `nestjs-api` per `nestjs-project/AGENTS.md`. Containers use Compose service names, and host access may use localhost.
-- F03-01 baseline: `npm test -- --runInBand --forceExit` failed 1 of 144 tests due to a residual PostgreSQL enum in `migrations.integration-spec.ts`; `npm run lint` had 150 errors/40 warnings. E2E and `tsc --noEmit` passed. These inherited failures remain visible and must be fixed before final DoD, without claiming the current phase is green.
+- F03-01 baseline: `npm test -- --runInBand --forceExit` failed 1 of 144 tests due to a residual PostgreSQL enum in `migrations.integration-spec.ts`; `npm run lint` had 150 errors/40 warnings. These findings were retained in `progress.md` and corrected by F03-05 (migration test) and F03-10 (lint); final DoD command results are recorded there.
 
 ## Capability coverage and sequencing
 

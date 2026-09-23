@@ -60,3 +60,7 @@ The tagged MinIO Community build rejected per-bucket CORS and an abort-only S3 l
 ## F03-07 implementation alignment
 
 The F03-07 worker context owns both outbox publication and BullMQ consumption. The API only writes durable intent in PostgreSQL and does not connect to Redis, so confirmation remains available during a Redis outage. This clarifies the producer placement in the plan without changing message schema, job identity, retry policy, state transitions, or the F03-06/F03-07 boundary. Unit and real infrastructure tests cover the handoff, recovery, processing, and terminal media failure. No new planning gap was found; status remains `clean`.
+
+## F03-10 final implementation audit
+
+Compared the canonical HTML and all 12 BIAWS checklist items with actual source, migrations, Compose, generated OpenAPI, tests and command results in `progress.md`. The dispatcher row lease was corrected in the plan and decisions to the implemented 2 minutes; planned test commands were updated to real test filenames. The worker now waits for migrations on an empty database before starting dispatch/consumption and becoming healthy. The original six planning gaps remain resolved, no new contract gap was found, and the plan status remains `clean`. Runtime DoD is recorded separately in `progress.md`; it passed after the startup correction.

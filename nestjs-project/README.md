@@ -1,106 +1,49 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# StreamTube backend — NestJS 11
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This backend provides phase 02 authentication and phase 03 video upload, processing and delivery. It uses PostgreSQL 17, private MinIO buckets, Redis/BullMQ, a separate FFmpeg worker and Mailpit. The video frontend is outside phase 03.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Local setup
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Phase 03 infrastructure (F03-04)
-
-Copy `.env.example` to ignored `.env` and replace the example MinIO credentials. On a host with port 5432 available, use `docker compose up -d --build`. On the Codex host where that port is occupied, use `docker compose -f compose.yaml -f compose.codex.yaml up -d --build`. The API development container remains idle until a command starts Nest; the separate `video-worker` container runs an infrastructure bootstrap and health probe. Job publication and video processing are added in F03-07.
-
-MinIO uses private `videos-originals` and `videos-thumbnails` buckets, separate API/worker users and a persistent volume. Its API is on host port 9000 and console on 9001; containers connect to `minio:9000`. Redis uses an AOF-backed volume and is reachable inside Compose as `redis:6379`. The worker checks S3, Redis, FFmpeg/ffprobe and temporary disk availability. MinIO Community uses global CORS restricted to `S3_CORS_ALLOWED_ORIGIN` and cleans stale multipart uploads after 48 hours; the application upload TTL is 24 hours. Production S3 needs an equivalent bucket lifecycle rule.
-
-Run `./scripts/smoke-video-infra.sh` after the stack starts. It verifies a presigned multipart upload, browser CORS and `ETag`, `ListParts`/completion, Range read, abort, Redis connectivity and worker health, then removes its test object. The script uses the Codex Compose override for port 15432.
-
-## Project setup
+Copy `.env.example` to `.env` and replace the example MinIO credentials. `.env` is ignored by Git. From this directory:
 
 ```bash
-$ npm install
+docker compose -f compose.yaml -f compose.codex.yaml up -d --build
+docker compose -f compose.yaml -f compose.codex.yaml exec -T nestjs-api npm run migration:run
+docker compose -f compose.yaml -f compose.codex.yaml ps -a
+./scripts/smoke-video-infra.sh
 ```
 
-## Compile and run the project
+Use plain `docker compose` if host port 5432 is free. The optional Codex override binds the database to host port 15432; container connections always use service names (`db`, `minio`, `redis`, `mailpit`). The API development container is idle by default; tests start Nest in process. To serve the API deliberately, run `docker compose ... exec -d nestjs-api npm run start:dev`. `video-worker` runs independently and `minio-init` exits after creating private buckets and scoped users.
+
+MinIO uses persistent private `videos-originals` and `videos-thumbnails` buckets. Redis uses an AOF volume. The worker checks storage, queue, FFmpeg/ffprobe and temporary disk health. Local MinIO Community uses `S3_CORS_ALLOWED_ORIGIN` and stale multipart cleanup; production S3 needs an equivalent bucket lifecycle policy.
+
+## Video HTTP routes
+
+| Route | Access | Behavior |
+| --- | --- | --- |
+| `POST /videos/uploads` | JWT owner | Create draft and multipart upload. |
+| `POST /videos/:videoId/upload-parts` | JWT owner | Return presigned direct PUT URLs for requested parts. |
+| `GET /videos/:videoId/upload` | JWT owner | Resume and list uploaded parts. |
+| `POST /videos/:videoId/upload/complete` | JWT owner | Validate and confirm the object; persist one processing intent. |
+| `DELETE /videos/:videoId/upload` | JWT owner | Cancel an incomplete upload. |
+| `GET /videos/:videoId` | JWT owner | Read upload and processing status. |
+| `POST /videos/:videoId/reprocess` | JWT owner | Retry a confirmed errored video with a new generation. |
+| `GET /watch/:publicId` | Public | Read ready-video metadata. |
+| `HEAD/GET /watch/:publicId/stream` | Public | Stream full or single-range bytes from private storage. |
+| `GET /watch/:publicId/download` | Public | Download full or partial bytes with a safe filename. |
+| `GET /watch/:publicId/thumbnail` | Public | Proxy the generated JPEG. |
+
+The API never receives the video body or publishes a queue job. Clients PUT parts directly to S3/MinIO; API confirmation writes a PostgreSQL outbox row. The separate worker dispatches BullMQ jobs, extracts duration and metadata with ffprobe, generates a thumbnail with FFmpeg, and commits `ready` or `error` with generation and lease guards. The public URL uses a database-unique opaque ID. Ready videos are accessible by link in phase 03; visibility controls belong to phase 04.
+
+## Verification
+
+Run backend commands inside `nestjs-api`:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+docker compose -f compose.yaml -f compose.codex.yaml exec -T nestjs-api npm test -- --runInBand --forceExit
+docker compose -f compose.yaml -f compose.codex.yaml exec -T nestjs-api npm run test:e2e -- --runInBand
+docker compose -f compose.yaml -f compose.codex.yaml exec -T nestjs-api npx tsc --noEmit
+docker compose -f compose.yaml -f compose.codex.yaml exec -T nestjs-api npm run lint
 ```
 
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Integration and e2e tests use real Compose services and must run serially. `npm run lint` fixes formatting, so inspect the diff. `test/video-lifecycle.e2e-spec.ts` covers direct upload through the real worker and delivery; `src/videos/video-worker.integration-spec.ts` covers publication recovery. See `../docs/phases/phase-03-videos/progress.md` for the phase audit and actual command results. The generated API contract is `openapi.json`; Swagger UI is optional under `/api/docs` when `SWAGGER_ENABLED=true` and the API is running.

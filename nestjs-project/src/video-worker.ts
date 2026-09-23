@@ -4,7 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { Queue, Worker } from 'bullmq';
-import { statfs, writeFile } from 'node:fs/promises';
+import { rm, statfs, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { envValidationSchema } from './config/env.validation';
 import storageConfig from './config/storage.config';
@@ -53,6 +53,19 @@ async function bootstrap(): Promise<void> {
     },
   });
   await AppDataSource.initialize();
+  await rm('/tmp/video-processing/worker-health', { force: true });
+  let waitingForSchema = false;
+  while (true) {
+    const rows = await AppDataSource.query<Array<{ relation: string | null }>>(
+      "SELECT to_regclass('public.video_processing_outbox') AS relation",
+    );
+    if (rows[0]?.relation) break;
+    if (!waitingForSchema) {
+      console.log('Video worker waiting for database migrations');
+      waitingForSchema = true;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+  }
   const dispatcher = new VideoDispatcher(
     AppDataSource,
     queue as Queue<VideoJob>,
@@ -134,5 +147,5 @@ async function bootstrap(): Promise<void> {
 
 void bootstrap().catch((error: unknown) => {
   console.error('Video worker bootstrap failed', error);
-  process.exitCode = 1;
+  process.exit(1);
 });
