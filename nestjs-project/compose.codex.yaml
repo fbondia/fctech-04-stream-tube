@@ -1,0 +1,6 @@
+# Optional host-port override for Codex work on machines already using 5432.
+# Start with: docker compose -f compose.yaml -f compose.codex.yaml up -d
+services:
+  db:
+    ports: !override
+      - "15432:5432"

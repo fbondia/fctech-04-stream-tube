@@ -1,5 +1,3 @@
-# CLAUDE.md
-
 ## Environment Startup Verification
 
 **Default behavior:** starting the environment means starting **only infrastructure services** (database, mail, etc.) — **never** start the NestJS application server unless the user explicitly asks to run/serve the project (e.g., "rode o projeto", "suba o servidor", "run the app").

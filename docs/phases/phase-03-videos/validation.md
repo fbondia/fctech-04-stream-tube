@@ -1,0 +1,66 @@
+---
+kind: phase
+name: phase-03-videos
+status: clean
+issue_count: 0
+checked: 2026-09-23
+---
+
+# phase-03-videos — Validation
+
+Manual plan-validate passes against `context.md`, F03-02 decisions, canonical HTML, BIAWS notes, current backend and phase 02 conventions. First pass found six planning defects. Plan-resolve added the explicit F03-03 contract resolutions to the decisions document and verified package/service versions in `library-refs.md`. The second pass found no unresolved planning gap. `clean` refers to **plan completeness**, not to runtime tests or the final phase DoD.
+
+## Resolved issues — first pass
+
+| ID | Category | Finding and resolution |
+| --- | --- | --- |
+| AMB-01 | Upload contract | Exact 16 MiB part schedule, 597-part ceiling, 15-minute signatures, 24-hour upload lifetime, paginated ListParts check and S3-complete/DB-fail recovery are fixed in F03-03 contract resolutions; the plan specifies HTTP DTOs. |
+| AMB-02 | Access | Ready-by-link anonymous reading, owner-only private states and Fase 04 visibility boundary are fixed in F03-03 contract resolutions and Authorization Matrix. |
+| IC-01 | State | `draft → error`, confirmed-draft distinction and explicit generation-based reprocessing are fixed in F03-03 contract resolutions and state table. |
+| DG-01 | Handoff | One outbox row per generation, F03-07 sole dispatcher, leases, stable job ID, reconciliation and worker token are fixed in F03-03 contract resolutions and Events/Messages. |
+| AMB-03 | Streaming | One-range policy, 200/206/400/416, ETag/If-Range, HEAD and download behavior are fixed in F03-03 contract resolutions and API Contracts. |
+| MD-01 | Versions/testability | Exact npm versions and checked peers/Node engines, pinned Redis tag, MinIO tagged-source build route, ffmpeg candidate and executable SI test commands are fixed in `library-refs.md` and plan. Runtime pull/build remains an F03-04 acceptance test, not a missing design decision. |
+
+## Final findings — second pass
+
+### Inconsistencies
+
+_None._
+
+### Ambiguities
+
+_None._
+
+### Missing decisions
+
+_None._
+
+### Dependency gaps
+
+_None._
+
+### Inherited constraint conflicts
+
+_None._
+
+### Unresolved open questions
+
+_None._
+
+### Capability coverage
+
+All nine Fase 03 bullets from `docs/project-plan.md` map to TD-01..06 in `context.md`. Frontend video UI remains explicitly out of scope under the canonical HTML and BIAWS F03-03 task. SI order in the plan follows F03-04/F03-05 → F03-06 → F03-07 → F03-08 → F03-09 → F03-10.
+
+**Final status: clean.**
+
+## F03-04 runtime compatibility addendum
+
+The tagged MinIO Community build rejected per-bucket CORS and an abort-only S3 lifecycle rule. The implementation uses its documented global origin setting and stale multipart cleanup settings. The multipart API contract, 24-hour application TTL, private buckets and worker/queue boundary did not change. Real smoke validation proved the configured origin, `ETag` exposure, preflight, presigned upload, completion and Range read. The plan and decisions now describe the Community-specific configuration; no new planning gap remains. `clean` still describes plan completeness, not the phase DoD.
+
+## F03-07 implementation alignment
+
+The F03-07 worker context owns both outbox publication and BullMQ consumption. The API only writes durable intent in PostgreSQL and does not connect to Redis, so confirmation remains available during a Redis outage. This clarifies the producer placement in the plan without changing message schema, job identity, retry policy, state transitions, or the F03-06/F03-07 boundary. Unit and real infrastructure tests cover the handoff, recovery, processing, and terminal media failure. No new planning gap was found; status remains `clean`.
+
+## F03-10 final implementation audit
+
+Compared the canonical HTML and all 12 BIAWS checklist items with actual source, migrations, Compose, generated OpenAPI, tests and command results in `progress.md`. The dispatcher row lease was corrected in the plan and decisions to the implemented 2 minutes; planned test commands were updated to real test filenames. The worker now waits for migrations on an empty database before starting dispatch/consumption and becoming healthy. The original six planning gaps remain resolved, no new contract gap was found, and the plan status remains `clean`. Runtime DoD is recorded separately in `progress.md`; it passed after the startup correction.
