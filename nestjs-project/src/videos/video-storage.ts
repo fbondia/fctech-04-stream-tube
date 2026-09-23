@@ -5,12 +5,14 @@ import {
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
   HeadObjectCommand,
+  GetObjectCommand,
   ListPartsCommand,
   S3Client,
   UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import storageConfig from '../config/storage.config';
+import { Readable } from 'node:stream';
 
 export interface StoredPart {
   partNumber: number;
@@ -43,6 +45,12 @@ export abstract class VideoStorage {
     parts: StoredPart[],
   ): Promise<void>;
   abstract head(bucket: string, key: string): Promise<StoredObject | null>;
+  abstract read(
+    bucket: string,
+    key: string,
+    range?: string,
+    signal?: AbortSignal,
+  ): Promise<Readable>;
   abstract abort(bucket: string, key: string, uploadId: string): Promise<void>;
 }
 
@@ -176,6 +184,21 @@ export class S3VideoStorage extends VideoStorage {
         return null;
       throw error;
     }
+  }
+
+  async read(
+    bucket: string,
+    key: string,
+    range?: string,
+    signal?: AbortSignal,
+  ): Promise<Readable> {
+    const result = await this.internal.send(
+      new GetObjectCommand({ Bucket: bucket, Key: key, Range: range }),
+      { abortSignal: signal },
+    );
+    if (!(result.Body instanceof Readable))
+      throw new Error('S3 object body is not a Node stream');
+    return result.Body;
   }
 
   async abort(bucket: string, key: string, uploadId: string): Promise<void> {

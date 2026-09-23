@@ -720,6 +720,219 @@
           "videos"
         ]
       }
+    },
+    "/watch/{publicId}": {
+      "get": {
+        "operationId": "VideoWatchController_metadata",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ready video and media URLs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "publicId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "durationMs": {
+                      "type": "integer"
+                    },
+                    "sizeBytes": {
+                      "type": "integer"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "streamUrl": {
+                      "type": "string"
+                    },
+                    "downloadUrl": {
+                      "type": "string"
+                    },
+                    "thumbnailUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or non-ready video"
+          }
+        },
+        "summary": "Get metadata for a ready video by public URL",
+        "tags": [
+          "watch"
+        ]
+      }
+    },
+    "/watch/{publicId}/stream": {
+      "head": {
+        "operationId": "VideoWatchController_head",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full-object headers without body"
+          }
+        },
+        "summary": "Read full video stream headers",
+        "tags": [
+          "watch"
+        ]
+      },
+      "get": {
+        "operationId": "VideoWatchController_stream",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "description": "Exact strong ETag to permit partial response; mismatch returns full 200",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "One range: bytes=start-end, bytes=start-, or bytes=-suffix",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full video stream"
+          },
+          "206": {
+            "description": "Partial video stream"
+          },
+          "400": {
+            "description": "Malformed or unsupported Range"
+          },
+          "416": {
+            "description": "Unsatisfiable byte Range"
+          }
+        },
+        "summary": "Stream ready video bytes, with optional single byte Range",
+        "tags": [
+          "watch"
+        ]
+      }
+    },
+    "/watch/{publicId}/download": {
+      "get": {
+        "operationId": "VideoWatchController_download",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "description": "Exact strong ETag to permit partial response",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "One byte range",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video download"
+          },
+          "206": {
+            "description": "Partial video download"
+          },
+          "400": {
+            "description": "Malformed or unsupported Range"
+          },
+          "416": {
+            "description": "Unsatisfiable byte Range"
+          }
+        },
+        "summary": "Download ready video bytes, with optional Range",
+        "tags": [
+          "watch"
+        ]
+      }
+    },
+    "/watch/{publicId}/thumbnail": {
+      "get": {
+        "operationId": "VideoWatchController_thumbnail",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque 22-character video ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG thumbnail"
+          }
+        },
+        "summary": "Stream the ready video JPEG thumbnail",
+        "tags": [
+          "watch"
+        ]
+      }
     }
   },
   "info": {

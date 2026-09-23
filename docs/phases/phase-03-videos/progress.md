@@ -1,9 +1,17 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-07 — outbox dispatch and video worker
-**Status:** SI-03.6/03.7 implemented and verified; F03-08 is next. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
+**Current task:** F03-08 — public ready-video delivery
+**Status:** SI-03.8/03.9 implemented and verified. F03-09 is next. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## F03-08 — Ready-by-link metadata, streaming and download (2026-09-23)
+
+- Started from clean `feature/phase-03-videos` at `5b919e2` (merge base with `dev`: `8459b2f`). Confirmed F03-05/F03-07 `Concluído` in BIAWS, read the improvement context and current notes and F03-08 specification, and moved F03-08 to `Andamento`. The local canonical `../../índice/desafio04.html` SHA-256 matched BIAWS: `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`. Rechecked the phase plan, technical decisions, project plan, architecture diagram and backend instructions. No new package or contract decision was needed.
+- Added anonymous ready-by-link `/watch/:publicId` metadata; `HEAD`/`GET` stream; byte-range GET download; and JPEG thumbnail proxy. All public lookup paths return 404 for unknown and non-ready videos; the existing authenticated owner route remains available for private states. The existing 128-bit opaque ID and database uniqueness guarantee the stable public URL. Public responses contain no storage key or signed GET URL.
+- A strict single-range parser distinguishes unsupported syntax/multiple ranges (`400 UNSUPPORTED_RANGE`) from unsatisfiable ranges (`416 RANGE_NOT_SATISFIABLE` with `Content-Range: bytes */size`). It supports initial, middle, open-ended and suffix ranges, clamps end to object size, and honors Range only when `If-Range` is absent or equals the stored strong ETag. `HEAD` ignores Range. The API passes the selected Range to S3 and pipelines the Node stream to Express with backpressure; client disconnect aborts the upstream S3 request. Download uses the same path and a sanitized `Content-Disposition` with UTF-8 filename encoding.
+- Added parser/filename and upstream-cancellation unit tests and HTTP e2e tests against real PostgreSQL and private MinIO objects. The e2e assertions compare full and partial MP4 bytes, `200`/`206`/`400`/`416`, `Content-Range`, length, ETag, `HEAD`, `If-Range`, download bytes and JPEG object bytes; they also verify draft/processing/error masking and owner isolation. Test objects and rows are deleted. Generated `openapi.json` includes all watch routes and optional Range headers.
+- The first expanded e2e run hit the existing global 10-requests/minute guard after multiple playback Range requests, returning 429 instead of the expected parser error. Added a watch-controller limit of 600 requests/minute so playback can issue segments; reran the focused and complete suites without retries/skips. Verification inside `nestjs-api`: focused parser/cancellation tests, focused video-stream e2e, full `npm test -- --runInBand --forceExit` (37 suites, 179 tests), and full `npm run test:e2e -- --runInBand` (5 suites, 56 tests) exited 0. `npx tsc --noEmit`, targeted ESLint, `npm run openapi:export` and `git diff --check` exited 0. Repository-wide lint remains an inherited F03-10 gate.
 
 ## F03-07 — BullMQ dispatcher and FFmpeg consumer (2026-09-23)
 
