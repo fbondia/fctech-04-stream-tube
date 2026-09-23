@@ -1,9 +1,15 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-10 — documentation, Definition of Done and final audit
+**Current task:** Phase 03 completed; post-completion instruction consolidation
 **Status:** SI-03.11 implemented; final gates green. Fase 03 backend and infrastructure complete locally on `feature/phase-03-videos`.
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## Post-completion instruction consolidation (2026-09-23)
+
+- Made root, backend and frontend `AGENTS.md` files the canonical project instructions for Codex. Moved the useful guidance from all three `CLAUDE.md` files into the applicable `AGENTS.md`; the `CLAUDE.md` files now point to those files. Updated the root README to identify the instruction source.
+- Kept the completed Phase 03 backend and infrastructure scope explicit and Phase 04 publication as future work. Corrected frontend instruction drift about the untracked local OpenAPI copy and the already implemented backend watch routes.
+- Documentation-only change. `git diff --check` exited 0; no application code, configuration or tests changed, so runtime suites were not rerun for this consolidation.
 
 ## F03-10 — Final documentation and Definition of Done (2026-09-23)
 

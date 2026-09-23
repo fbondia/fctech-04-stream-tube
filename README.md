@@ -183,6 +183,7 @@ green-field-ia-project/
 │   │   └── database/                    # data-source, migrations e seeds
 │   ├── test/                            # Testes e2e
 │   ├── compose.yaml                     # API + PostgreSQL + Mailpit + MinIO + Redis + worker
+│   ├── AGENTS.md                        # Instruções do backend para Codex
 │   └── Dockerfile.dev
 ├── next-frontend/                       # Frontend (Next.js 16, App Router)
 │   ├── app/                             # Rotas, layouts, páginas e Route Handlers BFF
@@ -191,12 +192,16 @@ green-field-ia-project/
 │   ├── mocks/                           # MSW (handlers + server)
 │   ├── tests/                           # E2E (Playwright)
 │   ├── compose.yaml                     # Docker Compose (dev server)
+│   ├── AGENTS.md                        # Instruções do frontend para Codex
 │   └── Dockerfile.dev
-├── CLAUDE.md                            # Instruções para IA
+├── AGENTS.md                            # Instruções canônicas para IA (Codex)
+├── CLAUDE.md                            # Encaminhamento para AGENTS.md
 ├── FC Tube.fig                          # Design system do projeto (Figma)
 ├── whiteboard.png                       # Quadro branco do projeto
 └── README.md
 ```
+
+As instruções canônicas para Codex estão em `AGENTS.md`, com orientações específicas em `nestjs-project/AGENTS.md` e `next-frontend/AGENTS.md`. Os arquivos `CLAUDE.md` apenas encaminham para essas instruções, evitando versões divergentes.
 
 ## 📚 Fases do Projeto
 
