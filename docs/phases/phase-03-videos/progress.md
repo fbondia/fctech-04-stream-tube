@@ -1,9 +1,17 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-05 — video domain, persistence and state machine
-**Status:** F03-05 implementation and SI-03.2/03.3 checks complete; phase-wide lint findings inherited from F03-01 remain open for F03-10
+**Current task:** F03-06 — direct multipart upload and durable confirmation intent
+**Status:** SI-03.4/03.5 implementation and relevant checks complete; F03-07 owns queue publication and worker processing. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## F03-06 — Multipart upload and confirmation (2026-09-23)
+
+- Confirmed BIAWS F03-04/F03-05 `Concluído`, read the improvement context and current notes and F03-06 task, and moved F03-06 to `Andamento`. Rechecked the canonical `desafio04.html` copy (SHA-256 `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`), the F03-02 decisions, F03-03 clean plan, project plan, phase-02 conventions and backend instructions. The clean branch `feature/phase-03-videos` began this task at `36eeca1` (merge base with `dev`: `8459b2f`).
+- Added an S3 storage port and MinIO/S3 adapter with separate internal and public signing endpoints, path-style multipart initiation, 900-second presigned part URLs, paginated `ListParts`, complete, head and abort. API endpoints create the owner draft, sign batches of at most 20 ordered parts, report upload state for resume, cancel, confirm and expose owner status. The API accepts JSON metadata and part ETags only; signed `PUT` transfers bytes directly to storage.
+- Enforced exact declared size from 1 through decimal 10 GB, 16 MiB nonfinal parts, exact final remainder, MIME/extension pairing and owner masking. Confirmation claims a renewable 15-minute DB lease, compares client and S3 part numbers/ETags/sizes, completes S3 outside the transaction and checks `HeadObject`. A single transaction confirms the draft and inserts one `(video_id,generation)` outbox row. Retrying after S3 completion and a failed DB write uses `HeadObject` to finish the DB transaction; duplicate confirmation returns the current state. No queue publication was added. A minute-based sweep aborts expired incomplete uploads and marks orphan drafts `UPLOAD_EXPIRED`; server-side MinIO stale-upload cleanup covers the crash gap before an upload ID can be stored. Explicit cancel is idempotent.
+- Unit tests cover competing completion, malformed part sequences and confirmed retry. PostgreSQL + MinIO integration tests prove signed direct `PUT`, part resume, exact-size mismatch, owner isolation, cancellation, 10 GB metadata ceiling without allocating a 10 GB file, expiration and orphan cleanup, single outbox intent and the S3-completed/DB-failed retry window. API e2e covers JWT, validation, owner masking, signing and cancellation. Test objects and rows are cleaned up.
+- Verification inside `nestjs-api`: `npm test -- --runInBand --forceExit` exited 0 (31 suites, 165 tests); `npm run test:e2e -- --runInBand` exited 0 (4 suites, 53 tests); `npx tsc --noEmit` exited 0; targeted `npx eslint src/videos test/video-upload.e2e-spec.ts` exited 0; `npm run openapi:export` exited 0 and updated `nestjs-project/openapi.json`; `git diff --check` exited 0. F03-07 next implements the sole outbox dispatcher and processing worker. Repository-wide lint remains a F03-10 gate, with inherited findings recorded below.
 
 ## F03-05 — Video persistence and domain (2026-09-23)
 

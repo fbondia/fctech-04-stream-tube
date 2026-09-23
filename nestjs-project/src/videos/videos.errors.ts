@@ -21,3 +21,9 @@ export class InvalidVideoInputException extends DomainException {
     super('VALIDATION_ERROR', 400, 'Invalid video metadata');
   }
 }
+
+export class VideoUploadException extends DomainException {
+  constructor(code: string, status = 409) {
+    super(code, status, code.replaceAll('_', ' ').toLowerCase());
+  }
+}

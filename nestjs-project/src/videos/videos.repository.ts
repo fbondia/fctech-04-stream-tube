@@ -30,6 +30,40 @@ export interface ReadyVideoInput {
 export abstract class VideosRepository {
   abstract findChannelIdByUserId(userId: string): Promise<string | null>;
   abstract createDraft(input: DraftVideoInput): Promise<Video>;
+  abstract setUpload(
+    id: string,
+    uploadId: string,
+    expiresAt: Date,
+  ): Promise<boolean>;
+  abstract findExpiredUploads(limit: number): Promise<Video[]>;
+  abstract findOrphanDrafts(olderThan: Date, limit: number): Promise<Video[]>;
+  abstract expireOrphanDraft(
+    id: string,
+    generation: number,
+    olderThan: Date,
+  ): Promise<boolean>;
+  abstract claimExpiredUpload(
+    id: string,
+    token: string,
+    leaseUntil: Date,
+  ): Promise<boolean>;
+  abstract claimCompletion(
+    id: string,
+    token: string,
+    leaseUntil: Date,
+  ): Promise<boolean>;
+  abstract renewCompletion(
+    id: string,
+    token: string,
+    leaseUntil: Date,
+  ): Promise<boolean>;
+  abstract releaseCompletion(id: string, token: string): Promise<void>;
+  abstract confirmUpload(
+    id: string,
+    token: string,
+    bytes: number,
+    eTag: string,
+  ): Promise<boolean>;
   abstract findById(id: string): Promise<Video | null>;
   abstract findByPublicId(publicId: string): Promise<Video | null>;
   abstract markUploadError(

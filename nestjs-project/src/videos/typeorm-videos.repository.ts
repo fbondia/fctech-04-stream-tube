@@ -41,6 +41,172 @@ export class TypeOrmVideosRepository extends VideosRepository {
     );
   }
 
+  async setUpload(
+    id: string,
+    uploadId: string,
+    expiresAt: Date,
+  ): Promise<boolean> {
+    const result = await this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder()
+      .update()
+      .set({ upload_id: uploadId, upload_expires_at: expiresAt })
+      .where('id = :id AND status = :status AND upload_id IS NULL', {
+        id,
+        status: 'draft',
+      })
+      .execute();
+    return result.affected === 1;
+  }
+
+  findExpiredUploads(limit: number): Promise<Video[]> {
+    return this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder('video')
+      .where(
+        'video.status = :status AND video.upload_confirmed_at IS NULL AND video.upload_id IS NOT NULL AND video.upload_expires_at <= now() AND (video.completion_token IS NULL OR video.completion_lease_until < now())',
+        { status: 'draft' },
+      )
+      .orderBy('video.upload_expires_at', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  findOrphanDrafts(olderThan: Date, limit: number): Promise<Video[]> {
+    return this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder('video')
+      .where(
+        'video.status = :status AND video.upload_confirmed_at IS NULL AND video.upload_id IS NULL AND video.created_at < :olderThan',
+        { status: 'draft', olderThan },
+      )
+      .orderBy('video.created_at', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  async expireOrphanDraft(
+    id: string,
+    generation: number,
+    olderThan: Date,
+  ): Promise<boolean> {
+    const result = await this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder()
+      .update()
+      .set({
+        status: 'error',
+        failure_stage: 'upload',
+        failure_code: 'UPLOAD_EXPIRED',
+        updated_at: new Date(),
+      })
+      .where(
+        'id = :id AND generation = :generation AND status = :status AND upload_confirmed_at IS NULL AND upload_id IS NULL AND created_at < :olderThan',
+        { id, generation, status: 'draft', olderThan },
+      )
+      .execute();
+    return result.affected === 1;
+  }
+
+  async claimExpiredUpload(
+    id: string,
+    token: string,
+    leaseUntil: Date,
+  ): Promise<boolean> {
+    const result = await this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder()
+      .update()
+      .set({ completion_token: token, completion_lease_until: leaseUntil })
+      .where(
+        'id = :id AND status = :status AND upload_confirmed_at IS NULL AND upload_id IS NOT NULL AND upload_expires_at <= now() AND (completion_token IS NULL OR completion_lease_until < now())',
+        { id, status: 'draft' },
+      )
+      .execute();
+    return result.affected === 1;
+  }
+
+  async claimCompletion(
+    id: string,
+    token: string,
+    leaseUntil: Date,
+  ): Promise<boolean> {
+    const result = await this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder()
+      .update()
+      .set({ completion_token: token, completion_lease_until: leaseUntil })
+      .where(
+        'id = :id AND status = :status AND upload_confirmed_at IS NULL AND upload_id IS NOT NULL AND upload_expires_at > now() AND (completion_token IS NULL OR completion_lease_until < now())',
+        { id, status: 'draft' },
+      )
+      .execute();
+    return result.affected === 1;
+  }
+
+  async renewCompletion(
+    id: string,
+    token: string,
+    leaseUntil: Date,
+  ): Promise<boolean> {
+    const result = await this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder()
+      .update()
+      .set({ completion_lease_until: leaseUntil })
+      .where(
+        'id = :id AND completion_token = :token AND status = :status AND upload_confirmed_at IS NULL',
+        { id, token, status: 'draft' },
+      )
+      .execute();
+    return result.affected === 1;
+  }
+
+  async releaseCompletion(id: string, token: string): Promise<void> {
+    await this.dataSource
+      .getRepository(Video)
+      .createQueryBuilder()
+      .update()
+      .set({ completion_token: null, completion_lease_until: null })
+      .where('id = :id AND completion_token = :token', { id, token })
+      .execute();
+  }
+
+  async confirmUpload(
+    id: string,
+    token: string,
+    bytes: number,
+    eTag: string,
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      const result = await manager
+        .getRepository(Video)
+        .createQueryBuilder()
+        .update()
+        .set({
+          upload_confirmed_at: new Date(),
+          uploaded_bytes: String(bytes),
+          object_etag: eTag,
+          completion_token: null,
+          completion_lease_until: null,
+        })
+        .where(
+          'id = :id AND status = :status AND upload_confirmed_at IS NULL AND completion_token = :token AND expected_bytes = :bytes',
+          { id, status: 'draft', token, bytes: String(bytes) },
+        )
+        .execute();
+      if (result.affected !== 1) return false;
+      await manager.getRepository(VideoProcessingOutbox).insert({
+        video_id: id,
+        generation: 1,
+        event_name: 'process-video-v1',
+        schema_version: 1,
+        status: 'pending',
+      });
+      return true;
+    });
+  }
+
   findById(id: string): Promise<Video | null> {
     return this.dataSource.getRepository(Video).findOneBy({ id });
   }
