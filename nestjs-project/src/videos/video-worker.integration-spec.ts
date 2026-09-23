@@ -225,6 +225,35 @@ describe('Video processing (PostgreSQL + Redis + MinIO + worker)', () => {
     expect(failed.thumbnail_key).toBeNull();
   }, 55_000);
 
+  it('keeps a confirmed intent pending when queue publication fails, then recovers', async () => {
+    const bytes = await readFile(join(__dirname, 'fixtures/video-fixture.mp4'));
+    const video = await submit(bytes);
+    const unavailableQueue = {
+      add: jest.fn().mockRejectedValue(new Error('Redis unavailable')),
+    } as unknown as Queue<VideoJob>;
+    await expect(
+      new VideoDispatcher(db, unavailableQueue).dispatch(),
+    ).rejects.toThrow('Redis unavailable');
+    const pending = await db
+      .getRepository(VideoProcessingOutbox)
+      .findOneByOrFail({ video_id: video.id });
+    expect(pending.status).toBe('pending');
+    expect(pending.lease_token).toBeNull();
+    expect(await queue.getJob(videoJobId(video.id, 1))).toBeUndefined();
+
+    const dispatcher = new VideoDispatcher(db, queue);
+    expect(await dispatcher.dispatch()).toBe(1);
+    expect((await awaitStatus(video.id, 'ready')).thumbnail_key).toContain(
+      '/thumbnails/1.jpg',
+    );
+    expect(await dispatcher.dispatch()).toBe(0);
+    expect(
+      await db
+        .getRepository(VideoProcessingOutbox)
+        .countBy({ video_id: video.id }),
+    ).toBe(1);
+  }, 55_000);
+
   it('reconciles a published intent whose Redis job was lost', async () => {
     const bytes = await readFile(join(__dirname, 'fixtures/video-fixture.mp4'));
     const video = await submit(bytes);

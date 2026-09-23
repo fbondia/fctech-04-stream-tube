@@ -1,9 +1,27 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-08 — public ready-video delivery
-**Status:** SI-03.8/03.9 implemented and verified. F03-09 is next. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
+**Current task:** F03-09 — integrated regression and failure matrix
+**Status:** SI-03.10 implemented and verified. F03-10 is next. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## F03-09 — Integrated regression and resilience (2026-09-23)
+
+- Started from clean `feature/phase-03-videos` at `f4a45f8` (merge base with `dev`: `8459b2f`). Rechecked BIAWS improvement context, latest notes, F03-09 specification and predecessor statuses: F03-01..08 `Concluído`. Moved F03-09 to `Andamento`. The local canonical `../../índice/desafio04.html` SHA-256 again matched BIAWS: `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`. Rechecked the phase plan, project plan, target diagram and backend instructions.
+- Added `test/video-lifecycle.e2e-spec.ts`: JWT API initiation and part signing, real direct MinIO PUT, duplicate confirmation, one durable outbox intent, real Redis dispatch/worker processing, ready metadata, exact Range and download bytes, and generated JPEG. It owns and removes its database rows, queue job and S3 objects. Added a PostgreSQL/Redis/MinIO/worker integration case that forces publication failure, verifies the intent stays pending with its lease released, then dispatches successfully and reaches `ready` with one outbox row. This models temporary queue unavailability at the DB-to-queue boundary without stopping the shared Redis service during tests.
+
+| F03-09 matrix | Evidence |
+| --- | --- |
+| Clean migrations, rollback and constraints | `migrations.integration-spec.ts`, video and outbox entity integration specs; full unit/integration suite passed. |
+| Draft, direct upload, resume, 10 GB boundary, MIME, mismatched/incomplete parts, expiration, cancel, ownership | `video-upload.integration-spec.ts`, `video-upload.e2e-spec.ts`, `videos.service.integration-spec.ts`; size boundary uses metadata without allocating 10 GB. |
+| Confirmation idempotence, S3-completed/DB-failed recovery, one intent | `video-upload.integration-spec.ts` and new `video-lifecycle.e2e-spec.ts`; real MinIO and PostgreSQL. |
+| Queue publication failure, lost Redis job, duplicate delivery and generation safety | New `video-worker.integration-spec.ts` case, existing reconciliation/redelivery integration tests, dispatcher/consumer unit specs. |
+| Real FFmpeg metadata/JPEG, invalid media and timeout cleanup | `video-worker.integration-spec.ts`, `video-media.spec.ts`; real worker, MinIO and bounded temporary directory. |
+| Ready-only URL, Range 200/206/400/416, HEAD/If-Range, download and thumbnail bytes, disconnect abort | `video-stream.e2e-spec.ts`, `video-watch.spec.ts`, `video-range.spec.ts`, new full lifecycle e2e. |
+| API/Redis/worker restart and Fases 01–02 regression | Restarted those three Compose services, then reran the lifecycle e2e successfully; full backend and e2e suites include phases 01–02. |
+
+- Verification inside `nestjs-api`: focused lifecycle e2e exited 0; focused worker integration exited 0 (4 tests); full `npm test -- --runInBand --forceExit` exited 0 (37 suites, 180 tests); full `npm run test:e2e -- --runInBand` exited 0 (6 suites, 57 tests); `npx tsc --noEmit` and targeted ESLint on both changed TypeScript files exited 0. `docker compose ... restart nestjs-api video-worker redis` exited 0; focused lifecycle e2e after restart exited 0. `docker compose ps` showed PostgreSQL, Mailpit, MinIO, Redis and worker healthy. `git diff --check` exited 0. Database cleanup query found zero remaining lifecycle/processing fixture videos and zero orphan outbox rows.
+- The repository-wide `npm run lint` with `--fix`, final fresh-stack DoD, complete documentation audit and Git integration are F03-10 gates. The F03-09 tests prove recovery after a publication error and after service restarts; they do not assert that a worker restart during an active FFmpeg subprocess was exercised.
 
 ## F03-08 — Ready-by-link metadata, streaming and download (2026-09-23)
 
