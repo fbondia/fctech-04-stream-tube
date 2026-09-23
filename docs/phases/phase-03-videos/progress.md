@@ -3,6 +3,7 @@
 **Current task:** F03-01 — baseline, Git Flow and Codex foundation
 **Status:** F03-01 setup and baseline documented; inherited quality failures remain open
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
+**Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
 
 ## F03-01 — Baseline and setup
 
