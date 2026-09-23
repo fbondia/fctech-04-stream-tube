@@ -1,9 +1,17 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-06 — direct multipart upload and durable confirmation intent
-**Status:** SI-03.4/03.5 implementation and relevant checks complete; F03-07 owns queue publication and worker processing. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
+**Current task:** F03-07 — outbox dispatch and video worker
+**Status:** SI-03.6/03.7 implemented and verified; F03-08 is next. Phase-wide lint findings inherited from F03-01 remain open for F03-10.
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## F03-07 — BullMQ dispatcher and FFmpeg consumer (2026-09-23)
+
+- Started from clean `feature/phase-03-videos` at `3ab5b74` (merge base with `dev`: `8459b2f`). Read BIAWS improvement context, latest notes, F03-07 specification, canonical HTML checksum `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`, phase plan, decisions, library references and backend instructions. Moved F03-07 to `Andamento`.
+- Added the sole outbox dispatcher in the worker context. It claims pending intents with PostgreSQL `FOR UPDATE SKIP LOCKED` and short leases, publishes the versioned `{schemaVersion,videoId,generation,outboxId}` job with stable ID and BullMQ retry/backoff/retention, then marks the intent published conditionally. The reconciler requeues published intents whose Redis job is absent and marks terminal failed jobs after the processing lease expires. DB generation and token guards remain the source of truth for visible state. Queue depth, oldest intent/processing age, failed jobs and processing counts are logged every dispatch cycle.
+- Added a separate BullMQ worker that validates the message and current outbox/generation, claims and renews a processing lease, streams the object to a bounded temporary file, runs time-limited ffprobe and FFmpeg, uploads a deterministic 512-pixel JPEG, and conditionally commits duration/metadata/thumbnail/`ready`. Invalid media is terminal; transient storage, disk and timeout failures retry with backoff. Temporary files are removed in `finally`; no raw filenames, keys or credentials enter job payloads/logs. The API no longer registers a Redis client or depends on Redis health to start, preserving confirmation during a Redis outage. Removed the unused `@nestjs/bullmq` adapter; direct `bullmq@5.81.5` remains pinned.
+- Added a 3.8 KB real MP4 fixture, dispatcher, consumer and media unit tests, and PostgreSQL/Redis/MinIO/worker integration tests for real metadata/JPEG, duplicate delivery, invalid media and Redis job-loss reconciliation. A stalled S3 download test proves the job deadline aborts I/O and cleans the temporary directory. Test cleanup left zero video/outbox rows and no worker temporary directories. An initial integration run exposed an incorrect assumption about TypeORM's `UPDATE` raw result shape; changed dispatch claim to an explicit locked transaction and reran the tests successfully. A failed poison job created during that first run was removed from local Redis after verifying its exact ID.
+- Final verification: Compose `config --quiet` exited 0; `up -d --build nestjs-api video-worker` exited 0; `scripts/smoke-video-infra.sh` exited 0; full `npm test -- --runInBand --forceExit` exited 0 (35 suites, 175 tests); `npm run test:e2e -- --runInBand` exited 0 (4 suites, 53 tests); `npx tsc --noEmit` exited 0; targeted ESLint on all changed TypeScript files exited 0; `git diff --check` exited 0. The inherited repository-wide lint gate remains for F03-10. F03-08 next implements ready-by-link metadata, Range streaming, download and thumbnail delivery.
 
 ## F03-06 — Multipart upload and confirmation (2026-09-23)
 

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -47,16 +46,6 @@ import { VideosModule } from './videos/videos.module';
         synchronize: false,
       }),
     }),
-    BullModule.forRootAsync({
-      inject: [queueConfig.KEY],
-      useFactory: (configuredQueue: ConfigType<typeof queueConfig>) => ({
-        connection: {
-          host: configuredQueue.host,
-          port: configuredQueue.port,
-        },
-      }),
-    }),
-    BullModule.registerQueue({ name: 'video-processing' }),
     AuthModule,
     VideosModule,
   ],

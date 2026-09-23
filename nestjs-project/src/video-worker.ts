@@ -3,13 +3,17 @@ import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
-import { Queue } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import { statfs, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { envValidationSchema } from './config/env.validation';
 import storageConfig from './config/storage.config';
 import queueConfig from './config/queue.config';
 import videoConfig from './config/video.config';
+import { AppDataSource } from './database/data-source';
+import { VideoConsumer } from './videos/video-consumer';
+import { VideoDispatcher, VideoJob } from './videos/video-dispatcher';
+import { VideoMedia } from './videos/video-media';
 
 @Module({
   imports: [
@@ -48,6 +52,39 @@ async function bootstrap(): Promise<void> {
       maxRetriesPerRequest: null,
     },
   });
+  await AppDataSource.initialize();
+  const dispatcher = new VideoDispatcher(
+    AppDataSource,
+    queue as Queue<VideoJob>,
+  );
+  const consumer = new VideoConsumer(
+    AppDataSource,
+    new VideoMedia(
+      s3,
+      video.tempDir,
+      video.tempMinFreeBytes,
+      video.jobTimeoutMs,
+      video.ffprobeTimeoutMs,
+      video.ffmpegTimeoutMs,
+    ),
+    storage.thumbnailsBucket,
+  );
+  const worker = new Worker<VideoJob>(
+    configuredQueue.name,
+    (job) => consumer.process(job),
+    {
+      connection: {
+        host: configuredQueue.host,
+        port: configuredQueue.port,
+        maxRetriesPerRequest: null,
+      },
+      concurrency: video.workerConcurrency,
+      maxStalledCount: 1,
+    },
+  );
+  worker.on('error', (error) =>
+    console.error('Video queue worker error', error),
+  );
   const check = async () => {
     const disk = await statfs(video.tempDir);
     const freeBytes = disk.bavail * disk.bsize;
@@ -58,25 +95,41 @@ async function bootstrap(): Promise<void> {
     await Promise.all([
       s3.send(new HeadBucketCommand({ Bucket: storage.originalsBucket })),
       queue.getJobCounts(),
+      AppDataSource.query('SELECT 1'),
     ]);
     await writeFile('/tmp/video-processing/worker-health', String(Date.now()));
   };
   await check();
+  const sweep = async () => {
+    await dispatcher.reconcile();
+    await dispatcher.dispatch();
+    const metrics = await dispatcher.metrics();
+    console.log(
+      `video_queue pending=${metrics.pending} oldestPendingSeconds=${metrics.oldestPendingSeconds} processing=${metrics.processing} oldestProcessingSeconds=${metrics.oldestProcessingSeconds} waiting=${metrics.waiting} active=${metrics.active} delayed=${metrics.delayed} failed=${metrics.failed}`,
+    );
+  };
+  await sweep();
   const timer = setInterval(() => {
     check().catch((error: unknown) => {
       console.error('Worker infrastructure check failed', error);
     });
   }, 10000);
+  const dispatchTimer = setInterval(() => {
+    void sweep().catch(() => console.error('Video dispatcher sweep failed'));
+  }, video.dispatchIntervalMs);
   const stop = async () => {
     clearInterval(timer);
+    clearInterval(dispatchTimer);
+    await worker.close();
     await queue.close();
     s3.destroy();
+    await AppDataSource.destroy();
     await app.close();
     process.exit(0);
   };
   process.once('SIGTERM', () => void stop());
   process.once('SIGINT', () => void stop());
-  console.log('Video worker infrastructure ready; consumer starts in F03-07');
+  console.log('Video worker and dispatcher ready');
 }
 
 void bootstrap().catch((error: unknown) => {

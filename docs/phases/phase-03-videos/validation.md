@@ -56,3 +56,7 @@ All nine Fase 03 bullets from `docs/project-plan.md` map to TD-01..06 in `contex
 ## F03-04 runtime compatibility addendum
 
 The tagged MinIO Community build rejected per-bucket CORS and an abort-only S3 lifecycle rule. The implementation uses its documented global origin setting and stale multipart cleanup settings. The multipart API contract, 24-hour application TTL, private buckets and worker/queue boundary did not change. Real smoke validation proved the configured origin, `ETag` exposure, preflight, presigned upload, completion and Range read. The plan and decisions now describe the Community-specific configuration; no new planning gap remains. `clean` still describes plan completeness, not the phase DoD.
+
+## F03-07 implementation alignment
+
+The F03-07 worker context owns both outbox publication and BullMQ consumption. The API only writes durable intent in PostgreSQL and does not connect to Redis, so confirmation remains available during a Redis outage. This clarifies the producer placement in the plan without changing message schema, job identity, retry policy, state transitions, or the F03-06/F03-07 boundary. Unit and real infrastructure tests cover the handoff, recovery, processing, and terminal media failure. No new planning gap was found; status remains `clean`.

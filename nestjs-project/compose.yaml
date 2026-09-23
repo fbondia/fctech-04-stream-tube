@@ -19,8 +19,6 @@ services:
         condition: service_started
       minio-init:
         condition: service_completed_successfully
-      redis:
-        condition: service_healthy
 
   video-worker:
     restart: unless-stopped
