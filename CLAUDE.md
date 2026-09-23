@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-StreamTube — a video sharing platform (YouTube-like). Users can upload, manage, and publish videos. Anonymous users can watch freely; social features (comments, subscriptions, likes) require authentication.
+StreamTube is a video sharing platform under development. Through Phase 03, authenticated users can upload videos, and anyone with a link can watch a video after processing completes. Video management and publication are planned for Phase 04; social features are planned for later phases.
 
 More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 
