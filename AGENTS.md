@@ -1,33 +1,106 @@
-# StreamTube instructions for Codex
+## Project Overview
 
-## Current project scope
+StreamTube — a video sharing platform (YouTube-like). Users can upload, manage, and publish videos. Anonymous users can watch freely; social features (comments, subscriptions, likes) require authentication.
 
-- StreamTube is under development. Through Phase 03, authenticated users can upload videos and anyone with a link can watch a video after processing completes. Video management and publication are planned for Phase 04; social features are planned for later phases.
-- `nestjs-project/` contains the NestJS API, video worker and Docker Compose stack. Implemented modules include auth, users, channels, mail and videos. `next-frontend/` covers the earlier phases; Phase 03 has no video UI.
-- The implemented stack uses PostgreSQL 17 for application data and the processing outbox, private MinIO/S3 buckets for originals and thumbnails, Redis/BullMQ for the queue, a separate FFmpeg worker, and Mailpit for local email.
-- The API orchestrates direct multipart uploads and writes durable processing intent. It does not receive video bytes or publish BullMQ jobs. The worker alone dispatches outbox rows, consumes jobs, extracts metadata, generates thumbnails and commits video state. Ready videos are served by link with streaming and download.
-- This file is the canonical repository instruction file for Codex. Use `docs/project-plan.md` for product scope, the relevant phase artifacts for contracts and the current code for implemented behavior. `docs/diagrams/software-arch.mermaid` describes a target architecture that also includes future components. See `nestjs-project/README.md` for implemented video routes and verification commands.
+More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 
-## Working principles
+## Repository Structure
 
-- Keep modules, services and functions focused on their own responsibilities. Re-evaluate this as work progresses: if a module begins to own another domain's logic or entities, extract that responsibility into the proper module immediately. Follow existing patterns before creating new abstractions, and use strict TypeScript across the stack.
-- Use relevant unit, integration and e2e tests to check behavior. Follow the project's ESLint and Prettier conventions; review code for readability, maintainability and adherence to project practices. Keep architecture, setup and troubleshooting documentation in `docs/` and the project READMEs accurate.
-- Keep each change focused on one feature, fix or refactoring. Record unrelated findings separately; capture necessary work outside the current scope as a separate issue or task. Avoid mixing cosmetic edits with functional changes.
+This is a monorepo with two main areas:
 
-## Git and execution
+- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express), video worker and Compose services. Implemented modules include auth, users, channels, mail and videos.
+- `docs/` — Project documentation, architecture diagrams, and planning.
+- `next-frontend/` — Next.js frontend for the earlier phases; phase 03 has no video UI.
 
-- `main` is the stable branch and `dev` is the integration branch. Create `feature/*`, `bugfix/*`, `hotfix/*` or `docs/*` branches from `dev` and integrate them into `dev`; merge stable `dev` into `main` through the project flow. Never commit directly on `main` or push to `upstream`. Keep commits short, descriptive and focused on why the change was made.
-- Run the stack with Docker Compose. Use Compose service names (`db`, `minio`, `redis`, `mailpit`) for container connections; use `localhost` only for commands running on the host.
-- Run backend `npm`, `npx`, Node, TypeScript and Jest commands inside `nestjs-api`; see `nestjs-project/AGENTS.md`. When host port 5432 is occupied, include `nestjs-project/compose.codex.yaml` to expose PostgreSQL on host port 15432 without changing container connections.
-- Before using a new library, check its installed version in the project manifest and retrieve version-compatible official documentation. Cross-check APIs for deprecated or incompatible patterns, and follow official documentation over model memory. Use Context7 when available in the active session; otherwise consult official documentation directly and record the source in the applicable phase's `library-refs.md`. If a library is involved and its behavior is uncertain, documentation lookup is mandatory. If the documentation does not match the installed version, flag the discrepancy before proceeding. The project MCP declarations are in `.codex/config.toml`; verify availability before relying on them. Trivial language operations and established project CRUD patterns do not require a new lookup.
+## Architecture (C4 Container Diagram)
 
-## Planning and documentation
+`docs/diagrams/software-arch.mermaid` is the target architecture and still contains future components. The implemented phase 03 containers are:
 
-- `docs/phases/phase-03-videos/` records the completed Phase 03 decisions, clean validation, executable plan, implementation progress and library references. For future phases, use its workflow and the project skills under `.claude/` as references when relevant; Claude skills, hooks and agents are not automatically available in Codex. For each planning, implementation, debugging, refactoring or review task, identify its underlying concerns and apply the available Codex skills that fit them.
-- For new phase work, record decisions and requirements with traceable sources, validate the plan before implementation, and update progress and instructions as behavior changes. Do not claim a hook, sub-agent, MCP, test or command ran unless it actually did.
+- **API** (NestJS) → auth, upload orchestration, durable processing intent, video metadata, streaming and download. It does not receive video bytes or publish BullMQ jobs.
+- **Video worker** (NestJS + FFmpeg) → sole outbox dispatcher and BullMQ consumer; extracts media metadata, generates JPEG thumbnails and commits video state.
+- **PostgreSQL 17** → users, channels, videos and processing outbox.
+- **MinIO Community / S3** → private originals and thumbnails buckets.
+- **Redis 7 + BullMQ** → persistent processing queue.
+- **Mailpit** → local transactional email capture.
 
-## Definition of Done
+The video frontend remains outside phase 03. See `nestjs-project/README.md` for the implemented HTTP routes and verification commands.
 
-- Verify every change. During development, run the relevant unit, integration and e2e tests for changed behavior. Before completing code changes, run the full backend and e2e suites, `npx tsc --noEmit` and lint inside the container; fix any failures before declaring completion. For documentation-only changes, check the diff and affected references.
-- Use `*.spec.ts` for isolated unit tests, `*.integration-spec.ts` for real database/service tests and `*.e2e-spec.ts` for HTTP tests. Use real Compose infrastructure when practical.
-- Keep documentation consistent with the code. `npm run lint` uses `--fix`; inspect the diff after running it.
+## Docker Networking
+
+This project runs entirely in Docker containers. When configuring connections between services (database, cache, queue, etc.), **always use the Docker Compose service name** as the host — never `localhost` or `127.0.0.1`.
+
+Inside a container, `localhost` refers to the container itself, not the host machine or other containers. Services communicate through the Docker Compose network using their service names (e.g., `db`, `nestjs-api`).
+
+- **Correct:** `DB_HOST=db` (the Compose service name)
+- **Wrong:** `DB_HOST=localhost`
+
+This applies to all environment variables, configuration files, and code that references service hosts.
+
+## Working Principles
+
+- **Single Responsibility:** each module, service, and function should have a clear, focused responsibility. Re-evaluate adherence at every step — when a module starts owning logic or entities that are not its own (e.g., a service creating an entity from another domain), extract it immediately into the proper module instead of deferring to a later corrective task.
+- **Type Safety:** Strict TypeScript usage across all layers.
+- **Testing:** Strong emphasis on pyramid testing at all levels to ensure reliability and maintainability.
+- **Code Quality:** Use ESLint and Prettier for consistent code style. Code reviews should focus on readability, maintainability, and adherence to best practices.
+- **Documentation:** Comprehensive docs for architecture, setup, and troubleshooting in `docs/`.
+
+## Definition of Done (Technical)
+
+A change is only considered complete when **all** of the following pass:
+
+1. The relevant test suite passes (unit + integration + e2e affected by the change).
+2. The full test suite passes before finishing the task.
+3. TypeScript compiles cleanly: `npx tsc --noEmit` exits with code 0. Compilation errors must never be left as debt for future tasks.
+4. Lint passes: `npm run lint`.
+
+If any of these fails, the task is not done — fix the underlying issue before declaring completion.
+
+
+## Git Conventions
+
+- **Main branch:** `main` — never commit directly to it
+- Branches: `feature/*`, `bugfix/*`, `hotfix/*`, `docs/*`
+- **Commits:** short, descriptive messages focused on the "why" of the change
+- **Workflow:** Git Flow conventions. Two long-lived branches:
+  - `main` — stable, production-ready code 
+  - `dev` — integration branch; all feature/bugfix/hotfix branches start from `dev` and merge back into `dev`
+  - When `dev` is stable, it is merged into `main`
+
+## Testing Policy
+
+Every change must be tested. During development, run only the tests related to the modified code. Before finishing, always run the full test suite to ensure nothing is broken.
+
+## Scope Limits
+
+- Work on **one feature, fix, or refactoring at a time** — do not mix scopes
+- Do not include cosmetic changes (formatting, renaming) alongside functional changes
+- If something out of scope comes up during work, note it as a separate task instead of acting on it
+- Focus on the defined scope for each task to ensure clarity and maintainability of the codebase.
+- If you identify a necessary change that is out of scope, create a new issue or task for it instead of including it in the current work.
+
+## Agent Skill Usage
+
+When working on any task (planning, implementing, debugging, refactoring, 
+reviewing, etc.), decompose the request into its underlying subtasks and 
+concerns, then identify which available skills match any of them and activate 
+those skills.
+
+## Library Documentation Lookup
+
+Before using a new library, check its installed version and official documentation. Use Context7 when it is available in the active session; otherwise consult the official documentation directly and record the source in the phase library references.
+
+Always:
+
+- Check the installed library version in the project manifest
+- Retrieve version-compatible documentation
+- Cross-reference APIs to avoid deprecated or incompatible patterns
+- Follow the official documentation over training data
+
+Skip documentation lookup only for trivial operations such as:
+
+- Variable declarations
+- Basic control flow
+- Simple CRUD using established project patterns
+
+If a library is involved and there is uncertainty, documentation lookup is mandatory.
+If the documentation returned does not match the installed version, flag the discrepancy before proceeding.

@@ -1,7 +1,3 @@
-# Next.js frontend instructions for Codex
-
-The repository-root `AGENTS.md` provides project-wide context. This file contains the frontend-specific guidance migrated from `CLAUDE.md`. The frontend currently covers the earlier authentication phases; Phase 03 video UI is outside its scope.
-
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
@@ -10,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Environment Startup Verification
 
-**Default behavior:** starting the environment means starting **only the `next-frontend` container**. Start the Next.js dev server when the user requests a running app or when an authorized browser E2E test requires it.
+**Default behavior:** starting the environment means starting **only the `next-frontend` container** — **never** start the Next.js dev server unless the user explicitly asks to run/serve the project (e.g., "rode o projeto", "suba o servidor", "run the app").
 
 After starting the container, always confirm it is up before proceeding:
 
@@ -26,7 +22,7 @@ If the dev server has been started, verify it actually serves before claiming su
 curl -I http://localhost:3001   # expect HTTP/1.1 200 OK
 ```
 
-Do not start `npm run dev` merely to start the container; use it when serving the app or running browser E2E tests.
+Only start `npm run dev` when the user **explicitly** asks to run the application — never as part of "start the environment".
 
 ## Development Environment
 
@@ -63,7 +59,7 @@ docker compose down
 
 ## Commands
 
-Run frontend `npm`, `npx`, `node`, `tsc` and shadcn development commands **inside the container**. The documented exception is Playwright E2E, which runs on the host against the containerized dev server. Host Node may use a different version or working directory and can leave artifacts owned by the wrong user on the bind mount.
+**Strict rule:** every `npm`, `npx`, `node`, `tsc`, and shadcn command runs **inside the container**, never on the host. Running on the host uses a different Node version, bypasses the container's working directory, and can leave artifacts owned by the wrong user on the bind mount.
 
 ### Container-only commands (always prefix with `docker compose exec next-frontend`)
 
@@ -119,16 +115,18 @@ Next.js 16 App Router with React 19 Server Components by default. Routes, layout
 
 This project follows a **strict BFF model**: the browser never talks to the NestJS API directly. All client traffic flows through same-origin Route Handlers under `app/api/**`, which then proxy to the upstream NestJS API server-side. This eliminates CORS, keeps the backend URL out of the client bundle, and gives a single integration surface for MSW-based BFF tests.
 
-- **From the browser (Client Components):** fetch from implemented same-origin Route Handlers under `app/api/**` only (for example, `/api/auth/login`). Direct calls to the NestJS API from the browser are forbidden.
+- **From the browser (Client Components):** fetch from same-origin Route Handlers only (e.g., `fetch("/api/videos")`). Direct calls to the NestJS API from the browser are forbidden.
 - **From the server (Route Handlers, RSC, Server Actions):** read the upstream URL from `env.API_URL` (see `lib/env.ts`) and fetch from there. The Route Handler is the only layer that knows the backend address.
 
 #### OpenAPI contract — single source of truth for wire shapes
 
 The upstream API publishes an OpenAPI 3.x spec. **Every wire shape in `next-frontend/` — Route Handler requests/responses, MSW fixtures, BFF↔component types — is derived from that spec via generated types.** No DTO is hand-duplicated on the frontend; if a shape isn't in `paths`, it doesn't exist.
 
-Contract chain: committed `../nestjs-project/openapi.json` → optional local `openapi.json` copied by `../scripts/sync-openapi.sh` → `lib/api/types.gen.ts` (generated, do not edit) → `paths` (typed surface) → consumers (BFF + components + MSW). Re-sync and regenerate types when the upstream contract changes.
+Contract chain: `openapi.json` (committed local copy) → `lib/api/types.gen.ts` (generated, do not edit) → `paths` (typed surface) → consumers (BFF + components + MSW).
 
-Source of decisions: `../docs/decisions/technical-decisions-next-frontend-openapi-typing.md` (TD-01…TD-05).
+CI guard: `.github/workflows/openapi-freshness.yml` blocks merging stale spec/types pairs.
+
+Source of decisions: `docs/decisions/technical-decisions-next-frontend-openapi-typing.md` (TD-01…TD-05).
 
 **Env var convention — single key, server-only:**
 
@@ -138,7 +136,7 @@ Source of decisions: `../docs/decisions/technical-decisions-next-frontend-openap
 
 The concrete value of `API_URL` depends on Docker Compose topology (e.g., `http://nestjs-api:3000` on a shared Compose network vs `http://host.docker.internal:3000` from a separate stack). The stacks are currently separate — networking integration is deferred to its own infra task; in the meantime, `.env.local` carries whichever value the local environment can reach.
 
-The Phase 03 backend already provides ready-video streaming and download through `/watch/:publicId` routes. Frontend video playback is planned for a later phase; do not describe it as implemented here.
+Media streaming will eventually come from Object Storage (S3/MinIO) — TBD.
 
 Refer to the C4 container diagram at `docs/diagrams/software-arch.mermaid` for the full system view.
 
@@ -277,7 +275,7 @@ Before declaring any task done in this subproject:
 
 # Figma MCP Integration Rules — next-frontend
 
-These rules guide Figma-driven frontend changes when the named Figma tools are available. Follow the active Codex Figma skills before using those tools, and do not claim a tool or MCP call that did not run. If the tools are unavailable, use available project references and report the missing design context.
+These rules tell AI coding agents how to translate Figma designs into code for this project. They MUST be followed for every Figma-driven change.
 
 ## Figma Assets
 

@@ -1,36 +1,159 @@
-# NestJS backend instructions for Codex
+## Environment Startup Verification
 
-The repository-root `AGENTS.md` provides project-wide context. These instructions apply to `nestjs-project/`.
+**Default behavior:** starting the environment means starting **only infrastructure services** (database, mail, etc.) — **never** start the NestJS application server unless the user explicitly asks to run/serve the project (e.g., "rode o projeto", "suba o servidor", "run the app").
 
-## Start and verify
-
-Copy `.env.example` to ignored `.env` and replace the example storage credentials. From `nestjs-project/`:
+After starting infrastructure, always confirm the containers are up before proceeding:
 
 ```bash
-docker compose -f compose.yaml -f compose.codex.yaml up -d --build
-docker compose -f compose.yaml -f compose.codex.yaml ps -a
-docker compose -f compose.yaml -f compose.codex.yaml exec -T db pg_isready -U streamtube
-docker compose -f compose.yaml -f compose.codex.yaml exec -T nestjs-api npm run migration:run
-./scripts/smoke-video-infra.sh
+docker compose ps   # all services must show status "running"
 ```
 
-Use the optional `compose.codex.yaml` only when host port 5432 is occupied; it exposes PostgreSQL on host port 15432 while containers still use `db:5432`, `minio:9000`, `redis:6379` and `mailpit:1025`. Without a port conflict, plain `docker compose` is sufficient. `nestjs-api` is an idle development container until Nest is started explicitly; tests start the application in process. `minio-init` exits successfully after idempotent private bucket and policy setup; `video-worker` runs independently and should become healthy.
+Then verify each infrastructure service is actually ready to accept connections — not just running:
 
-## Implemented Phase 03
+- **PostgreSQL:** `docker compose exec db pg_isready -U streamtube` — expect `accepting connections`
 
-- `VideosModule` owns the video entity, processing outbox, owner upload routes and ready-video delivery. `POST /videos/uploads` creates a channel-owned draft. Authenticated `POST /videos/:videoId/upload-parts`, `GET /videos/:videoId/upload`, `POST /videos/:videoId/upload/complete`, `DELETE /videos/:videoId/upload`, `GET /videos/:videoId` and `POST /videos/:videoId/reprocess` sign parts, resume or complete uploads, cancel an incomplete upload, show owner status and request explicit reprocessing.
-- Clients PUT video bytes directly to presigned MinIO/S3 part URLs. The API accepts metadata and ETags, confirms the object and writes one durable outbox intent transactionally. It does not connect to Redis to publish jobs.
-- The separate video worker is the sole outbox dispatcher and BullMQ consumer. It streams originals to bounded temporary disk, runs ffprobe/FFmpeg, uploads a deterministic JPEG thumbnail and conditionally commits `draft → processing → ready|error` using generation and lease checks.
-- Anonymous `GET /watch/:publicId`, `HEAD`/`GET /watch/:publicId/stream`, `GET /watch/:publicId/download` and `GET /watch/:publicId/thumbnail` serve ready videos by a stable opaque ID. `VideoWatchService` proxies private S3 objects using a single validated byte Range, backpressure, `206`/`416` responses and abort on disconnect. Private storage keys are not returned. Owner status remains authenticated at `/videos/:videoId`. Video management and publication belong to Phase 04; there is no Phase 03 video UI.
-- Video source is in `src/videos/`, the worker entrypoint in `src/video-worker.ts`, and the versioned schema in `src/database/migrations/`. The Phase 03 contract and evidence are in `../docs/phases/phase-03-videos/`.
+Only start the NestJS dev server (`npm run start:dev`) when the user **explicitly** asks to run the application — never as part of "start the environment".
 
-## Execution and verification
+## Development Environment
 
-- Follow the existing NestJS 11 module, DTO, exception, guard, repository, migration and test patterns. For file-specific detail, read the matching `.claude/rules/` files manually; Codex does not load Claude rules automatically.
-- Run backend `npm`, `npx`, Node, TypeScript and Jest commands through `docker compose exec -T nestjs-api`. The API service is an idle development container until Nest is started for a requested run or test. Use `compose.codex.yaml` when host port 5432 is occupied.
-- Run integration and e2e suites serially against the shared test database (`--runInBand` where needed). Keep unit tests free of external I/O, integration tests on real services and e2e tests on HTTP and database paths.
-- Container connections use Compose names (`db`, `mailpit`, `minio`, `redis`); host probes may use `localhost`. Run `scripts/smoke-video-infra.sh` after Compose changes.
-- For upload or worker contract changes, run focused upload and worker tests against PostgreSQL, MinIO, Redis and the worker. For delivery changes, run `video-range.spec.ts` and `video-stream.e2e-spec.ts`.
-- Before completing code changes, run the full `npm test -- --runInBand --forceExit`, `npm run test:e2e -- --runInBand`, `npx tsc --noEmit` and `npm run lint` inside `nestjs-api`. `npm run lint` uses `--fix`; inspect its diff. Keep `*.spec.ts`, `*.integration-spec.ts` and `*.e2e-spec.ts` at their respective test levels.
-- Preserve the versioned migrations and existing auth, users, channels and mail behavior. Record new phase progress in that phase's documentation rather than treating the completed Phase 03 progress log as an active task log.
-- Declare templates and other runtime assets in `nest-cli.json` so `nest build` includes them. Do not start a persistent API server for a read-only environment check.
+This project runs inside Docker. Always use the container for development:
+
+```bash
+# Start containers
+docker compose up -d
+
+# Install dependencies (first time only)
+docker compose exec nestjs-api npm install
+
+# Run the dev server (watch mode)
+docker compose exec nestjs-api npm run start:dev
+```
+
+Services:
+- `nestjs-api` — NestJS API, port `3000`
+- `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+
+All verification and teardown commands run on the **host machine**:
+
+```bash
+# Verify NestJS is running (expect 200 + "Hello World!")
+curl http://localhost:3000
+
+# Verify PostgreSQL is ready (runs inside the db container)
+docker compose exec db pg_isready -U streamtube
+
+# Check container logs
+docker compose logs nestjs-api
+docker compose logs db
+
+# Tear down the entire environment
+docker compose down
+```
+
+## Commands
+
+**Strict rule:** every `npm`, `npx`, `node`, `tsc`, and test command runs **inside the container**, never on the host. Running on the host causes env-var divergence (`DB_HOST` resolves to `localhost` instead of the Compose service), uses a different Node version, and produces results that do not reflect what runs in CI/prod.
+
+### Container-only commands (always prefix with `docker compose exec nestjs-api`)
+
+```bash
+npm run start:dev                        # Dev server with hot-reload
+npm run build                            # Compile to dist/
+npm run start:prod                       # Run compiled build
+
+npm test                                 # Unit tests
+npm run test:watch                       # Unit tests in watch mode
+npm run test:cov                         # Coverage report
+npm run test:e2e                         # End-to-end tests (always with --runInBand)
+
+npx tsc --noEmit                         # Type-check (required before declaring a task done)
+npm run lint                             # ESLint with auto-fix
+npm run format                           # Prettier formatting
+```
+
+### Host-only commands (Docker / connectivity probes)
+
+```bash
+docker compose ps
+docker compose logs nestjs-api
+docker compose exec db pg_isready -U streamtube
+curl http://localhost:3000
+```
+
+### Test execution
+
+Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+
+```bash
+docker compose exec nestjs-api npm test -- --runInBand
+docker compose exec nestjs-api npm run test:e2e   # already configured
+```
+
+Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently.
+
+During active development, run only the tests related to the file being changed (`npm test -- path/to/file.spec.ts`). Before declaring a task done, run the full suite — see the global `CLAUDE.md` → "Definition of Done (Technical)".
+
+## Long-running Processes
+
+Commands that never exit (dev server, watch modes) must be run in background in the Bash tool — otherwise the agent blocks indefinitely waiting for the process to return.
+
+This applies to: `start:dev`, `start:prod`, `test:watch`, and any other persistent process.
+
+## Test Type Selection
+
+Choose the suffix by what the test really does, not by where the code under test lives. The suffix is a contract that drives Jest config (`testRegex`, parallelism), CI steps, and reader expectations.
+
+| Suffix                  | Purpose                                                              | DB / external I/O | Location                     |
+|-------------------------|----------------------------------------------------------------------|-------------------|------------------------------|
+| `*.spec.ts`             | **Unit** — pure logic, all collaborators mocked                      | Forbidden         | Next to the source file      |
+| `*.integration-spec.ts` | **Integration** — exercises real DB, real repositories, real modules | Required          | Next to the source file      |
+| `*.e2e-spec.ts`         | **End-to-end** — full HTTP cycle via `supertest`                     | Required          | `nestjs-project/test/`       |
+
+A test that constructs a `TypeOrmModule.forRoot`, opens a connection, or hits the `db` service **must** be `*.integration-spec.ts`, never `*.spec.ts`. A test that boots the full Nest application and makes HTTP calls **must** be `*.e2e-spec.ts`.
+
+Conventions for **how to write** each kind of test (mocking patterns, AAA structure, override strategies for global guards, etc.) live in `.claude/rules/nestjs-testing.md` and load when you edit a test file.
+
+## Jest Configuration
+
+These settings are required in `package.json` (jest config) and `test/jest-e2e.json` for the project's tests to work correctly:
+
+- `setupFiles: ["dotenv/config"]` — without this, `.env` is not loaded inside the Jest process. `DB_HOST`, `JWT_SECRET`, etc. fall back to undefined or to the host's `localhost`, breaking container-to-container DNS.
+- `testRegex: '.*\\.(spec|integration-spec)\\.ts$'` — covers both unit (`*.spec.ts`) and integration (`*.integration-spec.ts`) suffixes.
+
+Do not add new test-file suffixes; if a new test type is needed, update the regex deliberately.
+
+## Environment File Conventions
+
+`.env` is parsed by both Docker Compose and `dotenv` — values containing shell-special characters (`<`, `>`, `|`, `&`, spaces) **must be quoted** or rewritten:
+
+```dotenv
+# Wrong — the unquoted angle brackets are shell redirection syntax and break parsing
+MAIL_FROM=StreamTube <noreply@streamtube.local>
+
+# Right — quote the value
+MAIL_FROM="StreamTube <noreply@streamtube.local>"
+```
+
+Whenever possible, prefer storing only the bare address in `.env` and composing display names in code (e.g., in `mail.config.ts`) so the file stays shell-safe.
+
+## Build Assets
+
+`tsc` (and therefore `nest build`) only emits compiled `.ts` files to `dist/`. Any non-TypeScript runtime asset — Handlebars templates (`.hbs`), JSON fixtures, static config files, etc. — must be declared in `nest-cli.json` under `compilerOptions.assets` (with `watchAssets: true` for dev). Without that, the file exists in `src/` but is missing in `dist/` and runtime fails only after build.
+
+## Architecture
+
+NestJS with standard module structure. Source lives in `src/`, compiled output in `dist/`.
+
+- Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
+- Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
+
+## Code Conventions
+
+- **TypeScript:** `nodenext` module resolution, `ES2023` target, `strictNullChecks` on, `noImplicitAny` off
+- **Decorators:** `emitDecoratorMetadata` + `experimentalDecorators` enabled — required for NestJS DI
+- **Prettier:** single quotes, trailing commas everywhere
+- **ESLint:** `no-explicit-any` allowed; `no-floating-promises` and `no-unsafe-argument` are warnings
+
+## REST Conventions
+
+This is a RESTful API. All endpoints must follow standard REST conventions — correct HTTP methods, proper status codes, plural resource nouns, and consistent URL structure. Details are enforced via rules on controller files.
