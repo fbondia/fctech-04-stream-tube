@@ -1,9 +1,18 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-04 — MinIO, Redis and worker infrastructure
-**Status:** F03-04 implementation and SI-03.1 checks complete; inherited phase-wide quality failures remain open for F03-10
+**Current task:** F03-05 — video domain, persistence and state machine
+**Status:** F03-05 implementation and SI-03.2/03.3 checks complete; phase-wide lint findings inherited from F03-01 remain open for F03-10
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## F03-05 — Video persistence and domain (2026-09-23)
+
+- Confirmed BIAWS F03-03/F03-04 `Concluído` and F03-05 `Pendente`, then moved F03-05 to `Andamento`. Read the BIAWS implementation context and current notes, canonical HTML copy (SHA-256 `398218579b2dcb3eb69c97daa67efb5984ffd1d5a53e17975cbe51544b396e64`), project plan, phase-02 conventions and SI-03.2/03.3. The clean branch began at `8002d82`.
+- Added `videos` and `video_processing_outbox` entities plus a reversible PostgreSQL 17 migration. The schema includes FK to channels, opaque 22-character public ID and unique storage key, state/generation checks, bounded byte and metadata fields, leases, timestamps, and outbox uniqueness by `(video_id,generation)`.
+- Added `VideosModule`, a repository port and TypeORM implementation, owner/public lookups, 128-bit public ID generation with unique-conflict retry, draft validation and channel-scoped object key, conditional state updates guarded by generation and processing token, and transactional explicit reprocess with one new outbox intent. No video controller or binary upload endpoint was added; initial upload confirmation and queue publication remain F03-06 and F03-07 work respectively.
+- `compose exec -T nestjs-api npm run migration:run` exited 0 and applied `CreateVideos1790179200000`. The isolated migration integration test applies and reverses the new schema while retaining its pre-existing channel table. FK, unique, check and outbox constraints pass against the real PostgreSQL database.
+- `compose exec -T nestjs-api npm test -- --runInBand --forceExit videos.service.spec.ts video-state.spec.ts video.entity.integration-spec.ts video-processing-outbox.entity.integration-spec.ts videos.service.integration-spec.ts migrations.integration-spec.ts` exited 0: six suites, 13 tests. The full suite exited 0: 29 suites, 157 tests. `compose exec -T nestjs-api npx tsc --noEmit` exited 0. Targeted ESLint on the new files plus touched migration test/app module exited 0. `git diff --check` exited 0.
+- Updated the shared migration integration test to account for the new tables. Its setup now removes the residual `verification_tokens_type_enum` before replaying migrations, fixing the inherited F03-01 test failure; the origin remains recorded below. The inherited repository-wide lint findings remain for F03-10. F03-06 next adds multipart initiation/confirmation and the initial durable outbox row.
 
 ## F03-04 — Infrastructure and typed configuration
 
