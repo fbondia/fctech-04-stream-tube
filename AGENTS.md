@@ -1,27 +1,27 @@
 # StreamTube instructions for Codex
 
-## Scope and sources
+## Current project scope
 
-- This repository is the public fork used for challenge 04. The canonical challenge statement is the `desafio04.html` attachment on BIAWS improvement `desafio-04`; its TXT attachment is only a transcription. Read the improvement, its notes, and the relevant task before changing the phase.
-- Continue phases 01 and 02. For phase 03, change the backend, worker, infrastructure, tests, and process documents. The video frontend is out of scope.
-- Read `docs/project-plan.md`, `docs/diagrams/software-arch.mermaid`, the applicable phase 02 artifacts, and the current code. Treat the architecture diagram's future components as a target, not as implemented services.
-- Keep requirements and technical decisions traceable to the challenge, the project plan, a decisions document, or existing code.
+- StreamTube is under development. Through Phase 03, authenticated users can upload videos and anyone with a link can watch a video after processing completes. Video management and publication are planned for Phase 04; social features are planned for later phases.
+- `nestjs-project/` contains the NestJS API, video worker and Docker Compose stack. Implemented modules include auth, users, channels, mail and videos. `next-frontend/` covers the earlier phases; Phase 03 has no video UI.
+- The implemented stack uses PostgreSQL 17 for application data and the processing outbox, private MinIO/S3 buckets for originals and thumbnails, Redis/BullMQ for the queue, a separate FFmpeg worker, and Mailpit for local email.
+- The API orchestrates direct multipart uploads and writes durable processing intent. It does not receive video bytes or publish BullMQ jobs. The worker alone dispatches outbox rows, consumes jobs, extracts metadata, generates thumbnails and commits video state. Ready videos are served by link with streaming and download.
+- Read `docs/project-plan.md`, the relevant phase artifacts, current code and `CLAUDE.md` before changing behavior. `docs/diagrams/software-arch.mermaid` describes a target architecture that also includes future components. Keep these instructions and `CLAUDE.md` aligned with implemented behavior.
 
 ## Git and execution
 
-- Work on `feature/*` branched from this fork's `dev`; integrate into `dev`. Never commit directly on `main` or push to `upstream`.
-- Use Docker Compose service names for connections between containers. `localhost` is appropriate only for commands running on the host.
-- Run backend `npm`, `npx`, Node, TypeScript, and Jest commands inside `nestjs-api`; see `nestjs-project/AGENTS.md`. For Codex work on a host using port 5432, start the stack with `docker compose -f compose.yaml -f compose.codex.yaml up -d` from `nestjs-project/`; it exposes this project's database at host port 15432 for its PostgreSQL MCP.
-- Record branch/base SHA, decisions, commands, exit codes, results, and blockers in `docs/phases/phase-03-videos/progress.md`.
+- Create `feature/*`, `bugfix/*` or `hotfix/*` branches from `dev` and integrate them into `dev`. Never commit directly on `main` or push to `upstream`.
+- Run the stack with Docker Compose. Use Compose service names (`db`, `minio`, `redis`, `mailpit`) for container connections; use `localhost` only for commands running on the host.
+- Run backend `npm`, `npx`, Node, TypeScript and Jest commands inside `nestjs-api`; see `nestjs-project/AGENTS.md`. When host port 5432 is occupied, include `nestjs-project/compose.codex.yaml` to expose PostgreSQL on host port 15432 without changing container connections.
+- Before using a new library, check its installed version and official documentation. Use Context7 when available in the active session; otherwise consult official documentation directly and record the source in the applicable phase's `library-refs.md`. The project MCP declarations are in `.codex/config.toml`; verify availability before relying on them.
 
-## Required phase 03 workflow
+## Planning and documentation
 
-Follow `docs/phases/phase-03-videos/codex-workflow.md`: research → plan-context → plan-validate → plan-resolve (repeat validation and resolution until `clean`) → plan-build → implement each SI → final audit. Keep the same artifacts and formats as the project workflow under `.claude/skills/`; those Claude skills and `.claude/agents/` are reference material, not automatically loaded Codex capabilities. Read the relevant source files manually when a stage needs them. Do not claim a Claude hook, sub-agent, or MCP ran when it did not.
-
-Before using a new library, check its installed version and official documentation. Use Context7 when actually available; otherwise use the official documentation directly and record the source/version in `library-refs.md`. The project MCP configuration is in `.codex/config.toml`; verify availability in the active session before relying on it.
+- `docs/phases/phase-03-videos/` records the completed Phase 03 decisions, clean validation, executable plan, implementation progress and library references. Use its workflow and the project skills under `.claude/` as references for future phase work; Claude skills, hooks and agents are not automatically available in Codex.
+- For new phase work, record decisions and requirements with traceable sources, validate the plan before implementation, and update progress and instructions as behavior changes. Do not claim a hook, sub-agent, MCP, test or command ran unless it actually did.
 
 ## Definition of Done
 
-- Each SI's relevant unit, integration, and e2e tests pass before advancing. At phase completion, run the full backend tests, e2e suite, `npx tsc --noEmit`, and lint inside the container. Failures block completion.
-- Use `*.spec.ts` for isolated unit tests, `*.integration-spec.ts` for real database/service tests, and `*.e2e-spec.ts` for HTTP tests. Use real Compose infrastructure when practical.
-- Update the plan, progress, documentation, and instructions to match implemented behavior. Do not claim that the phase is complete from planning alone.
+- Run relevant unit, integration and e2e tests for changed behavior, then the full backend and e2e suites, `npx tsc --noEmit` and lint inside the container before completing code changes. Failures block completion.
+- Use `*.spec.ts` for isolated unit tests, `*.integration-spec.ts` for real database/service tests and `*.e2e-spec.ts` for HTTP tests. Use real Compose infrastructure when practical.
+- Keep documentation consistent with the code. `npm run lint` uses `--fix`; inspect the diff after running it.

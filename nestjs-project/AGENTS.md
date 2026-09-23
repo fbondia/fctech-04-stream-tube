@@ -1,12 +1,20 @@
 # NestJS backend instructions for Codex
 
-Read the repository-root `AGENTS.md` first. These instructions apply when working in `nestjs-project/`.
+Read the repository-root `AGENTS.md` and `CLAUDE.md` first. These instructions apply to `nestjs-project/`.
 
-- Follow the existing NestJS 11 module, DTO, exception, guard, repository, migration, and test patterns. For file-specific detail, read the matching `.claude/rules/nestjs-*.md`, `.claude/rules/typeorm-*.md`, `.claude/rules/typescript-strict.md`, or `.claude/rules/auth-jwt.md` manually; Codex does not load Claude rules automatically.
-- Run every `npm`, `npx`, `node`, TypeScript, and test command through `docker compose exec nestjs-api`. The Compose API service is a development container with an idle entrypoint; do not start the Nest server unless needed for an explicitly requested run or test.
-- Run integration and e2e suites serially against the shared test database (`--runInBand` where the script does not already set it). Keep unit tests free of external I/O, integration tests on real services, and e2e tests on real HTTP and database paths.
-- Container connections use Compose names (`db`, `mailpit`, `minio`, `redis`). Host probes may use `localhost`. The video worker is a separate process with the sole outbox dispatcher and BullMQ consumer. It streams originals to temporary disk, runs ffprobe/FFmpeg, writes thumbnails, and conditionally commits `ready` or `error`. Run `scripts/smoke-video-infra.sh` after Compose changes.
-- F03-06 provides `/videos/uploads` and owner upload routes through `VideoUploadService` and `VideoStorage`. The API signs direct S3 multipart parts, confirms the object and writes the outbox intent transactionally; only the worker's F03-07 dispatcher publishes jobs. API confirmation does not connect to Redis. Run focused upload and worker unit/integration tests against Compose PostgreSQL, MinIO, Redis and the worker before changing this contract.
-- F03-08 provides anonymous `/watch/:publicId` metadata, `HEAD`/`GET` stream, download and thumbnail routes for `ready` videos only. `VideoWatchService` proxies private S3 objects with a single validated byte Range, backpressure and abort on disconnect. Owner status remains at authenticated `/videos/:videoId`. Run `video-range.spec.ts` and `video-stream.e2e-spec.ts` when changing delivery behavior.
-- Inspect `package.json` scripts before running them. `npm run lint` has `--fix`, so check the resulting diff and do not silently fold unrelated baseline changes into the task.
-- Preserve the phase 01–02 backend and its versioned migrations. Record pre-existing failures in `docs/phases/phase-03-videos/progress.md` before changing code.
+## Implemented Phase 03
+
+- `VideosModule` owns the video entity, processing outbox, owner upload routes and ready-video delivery. `POST /videos/uploads` creates a channel-owned draft. Authenticated routes under `/videos/:videoId` sign multipart parts, resume or complete uploads, cancel an incomplete upload, show owner status and request explicit reprocessing.
+- Clients PUT video bytes directly to presigned MinIO/S3 part URLs. The API accepts metadata and ETags, confirms the object and writes one durable outbox intent transactionally. It does not connect to Redis to publish jobs.
+- The separate video worker is the sole outbox dispatcher and BullMQ consumer. It streams originals to temporary disk, runs ffprobe/FFmpeg, generates a JPEG thumbnail and conditionally commits `draft → processing → ready|error` using generation and lease checks.
+- Anonymous `/watch/:publicId` routes expose metadata, `HEAD`/`GET` stream, download and thumbnail for ready videos only. `VideoWatchService` proxies private S3 objects using a single validated byte Range, backpressure and abort on disconnect. Owner status remains authenticated at `/videos/:videoId`. Video management and publication belong to Phase 04; there is no Phase 03 video UI.
+
+## Execution and verification
+
+- Follow the existing NestJS 11 module, DTO, exception, guard, repository, migration and test patterns. For file-specific detail, read the matching `.claude/rules/` files manually; Codex does not load Claude rules automatically.
+- Run backend `npm`, `npx`, Node, TypeScript and Jest commands through `docker compose exec -T nestjs-api`. The API service is an idle development container until Nest is started for a requested run or test. Use `compose.codex.yaml` when host port 5432 is occupied.
+- Run integration and e2e suites serially against the shared test database (`--runInBand` where needed). Keep unit tests free of external I/O, integration tests on real services and e2e tests on HTTP and database paths.
+- Container connections use Compose names (`db`, `mailpit`, `minio`, `redis`); host probes may use `localhost`. Run `scripts/smoke-video-infra.sh` after Compose changes.
+- For upload or worker contract changes, run focused upload and worker tests against PostgreSQL, MinIO, Redis and the worker. For delivery changes, run `video-range.spec.ts` and `video-stream.e2e-spec.ts`.
+- Before completing code changes, run the full `npm test -- --runInBand --forceExit`, `npm run test:e2e -- --runInBand`, `npx tsc --noEmit` and `npm run lint` inside `nestjs-api`. `npm run lint` uses `--fix`; inspect its diff. Keep `*.spec.ts`, `*.integration-spec.ts` and `*.e2e-spec.ts` at their respective test levels.
+- Preserve the versioned migrations and existing auth, users, channels and mail behavior. Record new phase progress in that phase's documentation rather than treating the completed Phase 03 progress log as an active task log.
