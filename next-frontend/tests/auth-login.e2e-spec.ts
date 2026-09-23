@@ -44,6 +44,9 @@ test.describe("auth-login", () => {
       )
       .toBe(true)
 
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByText("Welcome to StreamTube")).toBeVisible()
+
     // No invalid-credentials / not-confirmed alert on success.
     await expect(page.locator("[data-slot='form-error']")).toHaveCount(0)
   })
