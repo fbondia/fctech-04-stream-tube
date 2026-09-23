@@ -1,9 +1,23 @@
 # phase-03-videos — Progress
 
-**Current task:** F03-03 — implementation planning and clean validation
-**Status:** F03-03 plan complete and validation clean; inherited quality failures remain open; implementation has not started
+**Current task:** F03-04 — MinIO, Redis and worker infrastructure
+**Status:** F03-04 implementation and SI-03.1 checks complete; inherited phase-wide quality failures remain open for F03-10
 **Canonical source:** BIAWS improvement `desafio-04`, attachment `desafio04.html`
 **Workflow management:** [biaws](https://biaws.bondia.com.br/) tracks improvement `desafio-04`, its F03 tasks, statuses, notes, and execution handoffs. This file records the corresponding repository evidence and test results.
+
+## F03-04 — Infrastructure and typed configuration
+
+- Confirmed in BIAWS that F03-03 is `Concluído`, F03-04 was `Pendente`; moved F03-04 to `Andamento`. Read the canonical HTML copy and current notes, SI-03.1, decisions and library references. Branch `feature/phase-03-videos` began clean at `1f5865b`.
+- Added Redis 7.4.7 Alpine with AOF and named volume; tagged-source MinIO Community build (`RELEASE.2025-10-15T17-29-55Z`, commit `9e49d5e`) with persistent data; idempotent private-bucket/user/policy initializer; separate FFmpeg-equipped worker image, startup and health probe; API queue producer registration; namespaced S3/queue/video configuration and Joi bounds; safe example values. Local `.env` is ignored and uses randomly generated credentials.
+- Installed exact `@nestjs/bullmq@11.0.5`, `bullmq@5.81.5`, `@aws-sdk/client-s3@3.1136.0`, and `@aws-sdk/s3-request-presigner@3.1136.0` inside `nestjs-api`; manifest and lockfile changed. Worker image packages its own lockfile dependencies for clean checkout startup.
+- Validation (all exit 0): `compose config --quiet`; `compose up -d --build --remove-orphans`; `compose ps -a` showed MinIO, Redis, DB and worker healthy, API running (idle development entrypoint), initializer exited 0; `compose exec -T nestjs-api npm ci --no-audit --no-fund` installed 1,059 packages from lockfile; `npm ls` resolved all four exact new versions; `npm test -- --runInBand --forceExit config` passed 3 suites/9 tests; `npx tsc --noEmit` passed; targeted ESLint on F03-04 TypeScript files passed; `./scripts/smoke-video-infra.sh` passed against real services. `git diff --check` passed.
+- The bootstrap worker checks Redis, private originals bucket, FFmpeg/ffprobe binaries and free temporary disk. It intentionally does not consume video jobs; job publication and processing belong to F03-07.
+- First real MinIO run created buckets and scoped users, then `mc cors set` exited 1 with `NotImplemented`: bucket CORS is AIStor-only for this release. Replaced it with Community-supported global `MINIO_API_CORS_ALLOW_ORIGIN` and updated decision, plan and refs. Browser-readable `ETag` remains a smoke gate.
+- A standalone abort-only S3 lifecycle rule was rejected with `InvalidArgument` by this Community build. Compose instead sets documented stale multipart expiry to 48 hours and cleanup interval to one hour; this leaves the 24-hour application TTL intact. S3 production bucket lifecycle remains a deployment requirement.
+- Smoke exercised S3 `CreateMultipartUpload`, presigned `UploadPart` at the browser host, CORS preflight and browser-readable `ETag`, `ListParts`, `CompleteMultipartUpload`, `HeadObject`, worker-role `GetObject(Range)`, abort and cleanup, Redis PING and worker health. First smoke exposed missing API `DeleteObject` for cleanup; scoped policy was corrected and repeated smoke passed. MinIO initializer also exited 0 on repeated Compose runs.
+- Restart check: Redis key `video-infra-restart-smoke` persisted through `compose restart minio redis video-worker` (`GET` returned `persisted`); post-restart smoke passed and the key was deleted. Buckets stayed available. This proves local volume persistence and reconnect behavior, not F03-07 job processing.
+- Runtime versions: FFmpeg/ffprobe `5.1.9-0+deb12u1`; Redis `7.4.7-alpine`; MinIO `RELEASE.2025-10-15T17-29-55Z` at commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` (Go 1.24.8); `mc` `RELEASE.2025-08-13T08-35-41Z`. The source build embeds the release tag through upstream `gen-ldflags.go` with `MINIO_RELEASE=RELEASE`. Local image IDs: MinIO `sha256:f995d98c6fc143f14818d4fa4dd8248f583ffd102e893f48f76a2c7e6031d425`, worker `sha256:0d5961ff659b3f5926297a8c01ec03d6606316ae43cd2fabe1ad6bc51f1a4c6f`. Redis image digest `sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf`; `mc` digest `sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727`.
+- The final release-tagged MinIO and typed-config worker rebuilds were redeployed; `minio --version`, `compose ps -a` and `./scripts/smoke-video-infra.sh` all exited 0. All declared healthchecks were healthy; API remained an idle development container as in baseline. No video processing was claimed or tested in this task.
 
 ## F03-01 — Baseline and setup
 

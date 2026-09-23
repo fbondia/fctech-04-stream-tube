@@ -1,10 +1,15 @@
 services:
   nestjs-api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - 3000:3000
+      - "3000:3000"
+    env_file: .env
+    environment:
+      VIDEO_INFRA_ENABLED: "true"
+      S3_INTERNAL_ENDPOINT: http://minio:9000
+      REDIS_HOST: redis
     volumes:
       - .:/home/node/app
     depends_on:
@@ -12,15 +17,47 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  video-worker:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: ["./scripts/start-video-worker.sh"]
+    env_file: .env
+    environment:
+      VIDEO_INFRA_ENABLED: "true"
+      S3_INTERNAL_ENDPOINT: http://minio:9000
+      REDIS_HOST: redis
+      VIDEO_TEMP_DIR: /tmp/video-processing
+    volumes:
+      - video-worker-temp:/tmp/video-processing
+    depends_on:
+      db:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "scripts/worker-health.js"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   db:
     image: postgres:17
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=streamtube
-      - POSTGRES_PASSWORD=streamtube
-      - POSTGRES_DB=streamtube
+      POSTGRES_USER: streamtube
+      POSTGRES_PASSWORD: streamtube
+      POSTGRES_DB: streamtube
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U streamtube"]
       interval: 5s
@@ -33,4 +70,55 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  minio:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${S3_CORS_ALLOWED_ORIGIN:?Set S3_CORS_ALLOWED_ORIGIN in .env}
+      MINIO_API_STALE_UPLOADS_EXPIRY: 48h
+      MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL: 1h
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    entrypoint: ["/bin/sh", "/init/init-minio.sh"]
+    env_file: .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - ./scripts/init-minio.sh:/init/init-minio.sh:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  redis:
+    restart: unless-stopped
+    image: redis:7.4.7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  minio-data:
+  redis-data:
+  video-worker-temp:

@@ -26,6 +26,11 @@ Context7 and PostgreSQL MCPs were not exposed in this Codex session. Package met
 
 ## Verification to carry into implementation
 
+F03-04 observed that `mc cors set` is unsupported by the pinned Community server (`NotImplemented`); bucket CORS instructions in AIStor documentation do not apply to it. Local Compose uses global `MINIO_API_CORS_ALLOW_ORIGIN` and the smoke checks browser-readable `ETag`. [Community answer](https://github.com/minio/minio/discussions/20841), [server configuration](https://github.com/minio/minio/blob/master/docs/config/README.md).
+Community also rejected an abort-only bucket lifecycle rule during F03-04. Its documented `MINIO_API_STALE_UPLOADS_EXPIRY` and `MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL` settings provide local orphan cleanup; Compose fixes them at 48 hours and one hour. Production S3 needs bucket lifecycle configuration.
+
+F03-04 pulled Redis `7.4.7-alpine` (`sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf`) and `mc` `RELEASE.2025-08-13T08-35-41Z` (`sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727`). Local MinIO image ID `sha256:f995d98c6fc143f14818d4fa4dd8248f583ffd102e893f48f76a2c7e6031d425` reports `RELEASE.2025-10-15T17-29-55Z` and full commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`; local worker image ID `sha256:0d5961ff659b3f5926297a8c01ec03d6606316ae43cd2fabe1ad6bc51f1a4c6f` contains Debian FFmpeg/ffprobe `5.1.9-0+deb12u1`. S3 multipart, presign, CORS/`ETag`, Range and abort passed against these services.
+
 1. F03-04 uses `npm install --save-exact` for the four new Node packages, checks `npm ls` and `npm ci` in the container, and records the lockfile versions. No `@aws-sdk/lib-storage` is needed: the **client** sends bytes directly and the API only orchestrates commands.
 2. F03-04 proves MinIO image build/pull and S3 commands, not just Compose parsing. Test `CreateMultipartUpload`, presigned `UploadPart` against a browser-reachable host, CORS `ETag`, paginated `ListParts`, `CompleteMultipartUpload`, `HeadObject`, `GetObject(Range)`, abort and bucket restart.
 3. F03-07 tests the real FFmpeg binary and a small valid/invalid fixture. Any source/build change in these versions requires updating this file, the plan and validation before the affected SI.

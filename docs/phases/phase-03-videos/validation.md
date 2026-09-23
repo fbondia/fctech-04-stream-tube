@@ -52,3 +52,7 @@ _None._
 All nine Fase 03 bullets from `docs/project-plan.md` map to TD-01..06 in `context.md`. Frontend video UI remains explicitly out of scope under the canonical HTML and BIAWS F03-03 task. SI order in the plan follows F03-04/F03-05 → F03-06 → F03-07 → F03-08 → F03-09 → F03-10.
 
 **Final status: clean.**
+
+## F03-04 runtime compatibility addendum
+
+The tagged MinIO Community build rejected per-bucket CORS and an abort-only S3 lifecycle rule. The implementation uses its documented global origin setting and stale multipart cleanup settings. The multipart API contract, 24-hour application TTL, private buckets and worker/queue boundary did not change. Real smoke validation proved the configured origin, `ETag` exposure, preflight, presigned upload, completion and Range read. The plan and decisions now describe the Community-specific configuration; no new planning gap remains. `clean` still describes plan completeness, not the phase DoD.

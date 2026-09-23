@@ -25,6 +25,14 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Phase 03 infrastructure (F03-04)
+
+Copy `.env.example` to ignored `.env` and replace the example MinIO credentials. On a host with port 5432 available, use `docker compose up -d --build`. On the Codex host where that port is occupied, use `docker compose -f compose.yaml -f compose.codex.yaml up -d --build`. The API development container remains idle until a command starts Nest; the separate `video-worker` container runs an infrastructure bootstrap and health probe. Job publication and video processing are added in F03-07.
+
+MinIO uses private `videos-originals` and `videos-thumbnails` buckets, separate API/worker users and a persistent volume. Its API is on host port 9000 and console on 9001; containers connect to `minio:9000`. Redis uses an AOF-backed volume and is reachable inside Compose as `redis:6379`. The worker checks S3, Redis, FFmpeg/ffprobe and temporary disk availability. MinIO Community uses global CORS restricted to `S3_CORS_ALLOWED_ORIGIN` and cleans stale multipart uploads after 48 hours; the application upload TTL is 24 hours. Production S3 needs an equivalent bucket lifecycle rule.
+
+Run `./scripts/smoke-video-infra.sh` after the stack starts. It verifies a presigned multipart upload, browser CORS and `ETag`, `ListParts`/completion, Range read, abort, Redis connectivity and worker health, then removes its test object. The script uses the Codex Compose override for port 15432.
+
 ## Project setup
 
 ```bash
